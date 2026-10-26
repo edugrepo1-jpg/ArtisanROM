@@ -90,19 +90,21 @@ jobs:
               fi
             done
             find "$root/vendor" -printf '%y %P -> %l\n' | LC_ALL=C sort > "out/r8s-inspection/$role/vendor-files.txt"
-            python3 - "$root" "out/r8s-inspection/$role/vendor-linkage.txt" <<'PY'
+            find "$root/system" -printf '%y %P -> %l\n' | LC_ALL=C sort > "out/r8s-inspection/$role/system-files.txt"
+            python3 - "$root" "out/r8s-inspection/$role/native-linkage.txt" <<'PY'
           import pathlib, subprocess, sys
           root = pathlib.Path(sys.argv[1])
           with open(sys.argv[2], 'w') as output:
-              for folder in ('vendor/bin', 'vendor/lib', 'vendor/lib64'):
+              for folder in ('vendor/bin', 'vendor/lib', 'vendor/lib64', 'system/system/bin',
+                             'system/system/lib', 'system/system/lib64', 'system/system/system_ext/lib64'):
                   for path in sorted((root / folder).rglob('*')):
                       if not path.is_file(): continue
                       with path.open('rb') as stream: magic = stream.read(4)
                       if magic != b'\x7fELF': continue
                       output.write('\nFILE ' + str(path.relative_to(root)) + '\n')
-                      result = subprocess.run(['readelf', '-h', '-d', str(path)], capture_output=True, text=True)
+                      result = subprocess.run(['readelf', '-h', '-d', '--dyn-syms', '--wide', str(path)], capture_output=True, text=True)
                       for line in result.stdout.splitlines():
-                          if any(key in line for key in ('Class:', 'Machine:', '(NEEDED)', '(SONAME)')):
+                          if any(key in line for key in ('Class:', 'Machine:', '(NEEDED)', '(SONAME)', ' GLOBAL ', ' WEAK ')):
                               output.write(line + '\n')
           PY
           done

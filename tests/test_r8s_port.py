@@ -191,7 +191,17 @@ ADD_TO_WORK_DIR() {
     def test_donor_vendor_and_platform_baseline_are_unchanged(self):
         # Imports belong in target/r8s. No change to p3s donor bytes or its
         # platform-wide integration is part of this device port.
-        paths = ["prebuilts/samsung/p3sxxx", "platform/exynos990/patches/vendor"]
+        # Tree identities recorded from upstream v4.0.2. This also protects
+        # committed changes and works in a depth-1 Actions checkout.
+        baseline = {
+            "prebuilts/samsung/p3sxxx": "5056b4941ad74381daf4cc8068c3e2188c3aaef3",
+            "platform/exynos990/patches/vendor": "36e2de24dd8914713c8fca8c603ec79a71b30a34",
+            "platform/exynos990/patches/zz_p3s_audio_hal": "f2f2e852f1253ad3ffcd0b3ba65116b3ebf97827",
+        }
+        for path, expected in baseline.items():
+            actual = subprocess.check_output(["git", "rev-parse", "HEAD:" + path], cwd=ROOT, text=True).strip()
+            self.assertEqual(actual, expected, path)
+        paths = list(baseline)
         result = subprocess.run(["git", "diff", "HEAD", "--", *paths], cwd=ROOT,
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
