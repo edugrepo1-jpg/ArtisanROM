@@ -1,0 +1,125 @@
+name: Inspect r8s firmware inputs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r8s-source-audit
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          sparse-checkout: |
+            scripts
+            external
+            security
+            unica/configs
+            platform/exynos990
+            target/r8s
+      - name: Free unused runner storage
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+      - name: Install firmware inspection dependencies
+        run: |
+          sudo apt-get update
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            attr binutils build-essential clang cmake curl git lld lz4 patchelf \
+            libbrotli-dev libbz2-dev libelf-dev libfuse-dev libgtest-dev liblz4-dev \
+            libpcre2-dev libprotobuf-dev libssl-dev libunwind-dev libzstd-dev \
+            linux-modules-extra-$(uname -r) pkg-config protobuf-compiler python-is-python3 \
+            python3 unzip wget xz-utils zip
+          sudo modprobe erofs
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Restore host tools
+        id: tools
+        uses: actions/cache@v4
+        with:
+          path: out/tools
+          key: r8s-host-tools-${{ runner.os }}-${{ hashFiles('.gitmodules', 'external/make.sh', 'external/patches/**') }}
+      - name: Build missing host tools
+        run: |
+          source ./buildenv.sh r8s
+          ./scripts/build_dependencies.sh
+      - name: Save host tools for the next ROM build
+        if: steps.tools.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: out/tools
+          key: r8s-host-tools-${{ runner.os }}-${{ hashFiles('.gitmodules', 'external/make.sh', 'external/patches/**') }}
+      - name: Obtain the configured Samsung source and r8s firmware
+        run: |
+          source ./buildenv.sh r8s
+          ./scripts/download_fw.sh
+          ./scripts/extract_fw.sh
+      - name: Collect exact framework and driver inputs
+        run: |
+          source ./buildenv.sh r8s
+          mkdir -p out/r8s-inspection/source out/r8s-inspection/target
+          for role in source target; do
+            if [ "$role" = source ]; then firmware="$SOURCE_FIRMWARE"; else firmware="$TARGET_FIRMWARE"; fi
+            IFS=/ read -r model csc _ <<< "$firmware"
+            root="$FW_DIR/${model}_${csc}"
+            cp "$root/.extracted" "out/r8s-inspection/$role/firmware-version.txt"
+            for relative in system/system/build.prop vendor/build.prop vendor/etc/vintf vendor/etc/init \
+              vendor/etc/wifi vendor/etc/bluetooth vendor/etc/selinux; do
+              if [ -e "$root/$relative" ]; then
+                mkdir -p "out/r8s-inspection/$role/$(dirname "$relative")"
+                cp -a "$root/$relative" "out/r8s-inspection/$role/$relative"
+              fi
+            done
+            find "$root/vendor" -type f -printf '%P\n' | LC_ALL=C sort > "out/r8s-inspection/$role/vendor-files.txt"
+            python3 - "$root" "out/r8s-inspection/$role/vendor-linkage.txt" <<'PY'
+          import pathlib, subprocess, sys
+          root = pathlib.Path(sys.argv[1])
+          with open(sys.argv[2], 'w') as output:
+              for folder in ('vendor/bin', 'vendor/lib', 'vendor/lib64'):
+                  for path in sorted((root / folder).rglob('*')):
+                      if not path.is_file(): continue
+                      with path.open('rb') as stream: magic = stream.read(4)
+                      if magic != b'\x7fELF': continue
+                      output.write('\nFILE ' + str(path.relative_to(root)) + '\n')
+                      result = subprocess.run(['readelf', '-h', '-d', str(path)], capture_output=True, text=True)
+                      for line in result.stdout.splitlines():
+                          if any(key in line for key in ('Class:', 'Machine:', '(NEEDED)', '(SONAME)')):
+                              output.write(line + '\n')
+          PY
+          done
+          root="$FW_DIR/SM-S926B_EUX/system/system"
+          for relative in framework/services.jar framework/framework.jar framework/framework-res.apk \
+            priv-app/SecSettings/SecSettings.apk priv-app/SettingsProvider/SettingsProvider.apk \
+            priv-app/BiometricSetting/BiometricSetting.apk system_ext/priv-app/SystemUI/SystemUI.apk \
+            apex/com.android.bt.apex apex/com.android.btservices.apex; do
+            if [ -f "$root/$relative" ]; then
+              mkdir -p "out/r8s-inspection/source/original/$(dirname "$relative")"
+              cp "$root/$relative" "out/r8s-inspection/source/original/$relative"
+            fi
+          done
+          for relative in framework/services.jar framework/framework.jar \
+            priv-app/SecSettings/SecSettings.apk priv-app/SettingsProvider/SettingsProvider.apk; do
+            apktool -JXmx2500m d --no-res --no-debug-info -j 2 \
+              -o "out/r8s-inspection/source/decoded/$relative" "$root/$relative"
+          done
+          cp "$TOOLS_DIR/bin/apktool.jar" out/r8s-inspection/
+          find out/r8s-inspection/source/original -type f -exec sha256sum {} + > out/r8s-inspection/source-sha256.txt
+      - name: Retain firmware inputs for offline patch and HAL review
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8s-exact-firmware-inputs
+          path: out/r8s-inspection
+          if-no-files-found: error
+          retention-days: 5
+
