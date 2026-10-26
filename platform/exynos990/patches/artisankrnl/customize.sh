@@ -9,11 +9,20 @@ BUILD_KERNEL()
     cd "$KERNEL_TMP_DIR" || ABORT "BUILD_KERNEL: Cannot find $KERNEL_TMP_DIR"
 
     LOG "- Running build for ${TARGET_CODENAME}"
-    EVAL "./build.sh -m ${TARGET_CODENAME} -k y -r n"
+    EVAL "./build.sh -m ${TARGET_CODENAME} -k y -r n" || {
+        cd "$PARENT"
+        return 1
+    }
 
-    # Fixup for LTE devices
-    LOG "- Running build for ${TARGET_CODENAME}lte"
-    EVAL "./build.sh -m ${TARGET_CODENAME}lte -k n -r n -d y"
+    # r8s is already the SM-G780F LTE target; r8slte does not exist. Keep
+    # this in sync with the LTE artifact handling below (z3s has no variant).
+    if [[ "$TARGET_CODENAME" != "r8s" && "$TARGET_CODENAME" != "z3s" ]]; then
+        LOG "- Running build for ${TARGET_CODENAME}lte"
+        EVAL "./build.sh -m ${TARGET_CODENAME}lte -k n -r n -d y" || {
+            cd "$PARENT"
+            return 1
+        }
+    fi
 
     cd "$PARENT"
 }
@@ -102,7 +111,7 @@ REPLACE_KERNEL_BINARIES()
 
     # 5. Execute Build
     LOG "- Starting kernel build process."
-    BUILD_KERNEL
+    BUILD_KERNEL || { ABORT "Kernel build failed for $TARGET_CODENAME"; return 1; }
 
     # 6. Artifact Management
     [[ ! -d "$WORK_DIR/kernel" ]] && mkdir -p -- "$WORK_DIR/kernel"
@@ -113,7 +122,8 @@ REPLACE_KERNEL_BINARIES()
             rm -f "$WORK_DIR/kernel/$i.img"
             mv -f "$SRC" "$WORK_DIR/kernel/$i.img"
         else
-            LOGW "Artifact $i.img not found at $SRC"
+            ABORT "Kernel build did not produce $SRC"
+            return 1
         fi
     done
 
