@@ -33,11 +33,20 @@ jobs:
         run: |
           sudo apt-get update
           sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            attr binutils build-essential clang cmake curl git lld lz4 patchelf \
+            attr bc binutils brotli build-essential clang cmake cpio curl ffmpeg file git lld lz4 patchelf \
             libbrotli-dev libbz2-dev libelf-dev libfuse-dev libgtest-dev liblz4-dev \
             libpcre2-dev libprotobuf-dev libssl-dev libunwind-dev libzstd-dev \
             linux-modules-extra-$(uname -r) pkg-config protobuf-compiler python-is-python3 \
-            python3 unzip wget xz-utils zip
+            p7zip-full perl python3 rsync unzip webp wget xxd xz-utils zip zstd
+          # Check the shared firmware helper's actual list before spending time on tools.
+          python3 - <<'PY_CHECK'
+          import pathlib, re, shlex, shutil
+          source = pathlib.Path('scripts/utils/build_utils.sh').read_text()
+          match = re.search(r'^DEPENDENCIES=\((.*?)^\)', source, re.M | re.S)
+          if match is None: raise SystemExit('Shared dependency list not found')
+          missing = [tool for tool in shlex.split(match[1]) if shutil.which(tool) is None]
+          if missing: raise SystemExit('Missing host dependencies: ' + ' '.join(missing))
+          PY_CHECK
           sudo modprobe erofs
           git config --global user.name 'github-actions[bot]'
           git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -82,11 +91,26 @@ jobs:
             for relative in system/system/build.prop system/system/etc/floating_feature.xml \
               system/system/etc/permissions system/system/etc/sysconfig system/system/etc/vintf \
               system/system/etc/init system/system/etc/ld.config.txt system/system/etc/public.libraries.txt \
+              system/system/etc/task_profiles.json system/system/etc/cgroups.json \
+              system/system/etc/init/hw system/system/product/build.prop system/system/system_ext/build.prop \
+              system/system/product/etc/task_profiles.json system/system/system_ext/etc/task_profiles.json \
+              vendor/etc/task_profiles.json vendor/etc/cgroups.json odm/build.prop odm/etc/vintf odm/etc/init \
               vendor/build.prop vendor/etc/vintf vendor/etc/init vendor/etc/wifi vendor/etc/bluetooth \
               vendor/etc/selinux vendor/etc/fstab.exynos990 vendor/etc/audio_policy_configuration.xml; do
               if [ -e "$root/$relative" ]; then
                 mkdir -p "out/r8s-inspection/$role/$(dirname "$relative")"
                 cp -a "$root/$relative" "out/r8s-inspection/$role/$relative"
+              fi
+            done
+            for relative in framework/services.jar framework/framework.jar framework/ssrm.jar framework/sdhms.jar \
+              framework/framework-res.apk priv-app/SecSettings/SecSettings.apk \
+              priv-app/SettingsProvider/SettingsProvider.apk priv-app/BiometricSetting/BiometricSetting.apk \
+              priv-app/SamsungDeviceHealthManagerService/SamsungDeviceHealthManagerService.apk \
+              priv-app/SamsungCamera/SamsungCamera.apk system_ext/priv-app/SystemUI/SystemUI.apk \
+              apex/com.android.bt.apex apex/com.android.btservices.apex; do
+              if [ -f "$root/system/system/$relative" ]; then
+                mkdir -p "out/r8s-inspection/$role/original/$(dirname "$relative")"
+                cp "$root/system/system/$relative" "out/r8s-inspection/$role/original/$relative"
               fi
             done
             find "$root/vendor" -printf '%y %P -> %l\n' | LC_ALL=C sort > "out/r8s-inspection/$role/vendor-files.txt"
@@ -108,23 +132,15 @@ jobs:
                               output.write(line + '\n')
           PY
           done
-          root="$FW_DIR/SM-S926B_EUX/system/system"
-          for relative in framework/services.jar framework/framework.jar framework/framework-res.apk \
-            priv-app/SecSettings/SecSettings.apk priv-app/SettingsProvider/SettingsProvider.apk \
-            priv-app/BiometricSetting/BiometricSetting.apk system_ext/priv-app/SystemUI/SystemUI.apk \
-            apex/com.android.bt.apex apex/com.android.btservices.apex; do
-            if [ -f "$root/$relative" ]; then
-              mkdir -p "out/r8s-inspection/source/original/$(dirname "$relative")"
-              cp "$root/$relative" "out/r8s-inspection/source/original/$relative"
-            fi
-          done
+          IFS=/ read -r model csc _ <<< "$SOURCE_FIRMWARE"
+          root="$FW_DIR/${model}_${csc}/system/system"
           for relative in framework/services.jar framework/framework.jar \
             priv-app/SecSettings/SecSettings.apk priv-app/SettingsProvider/SettingsProvider.apk; do
             apktool -JXmx2500m d --no-res --no-debug-info -j 2 \
               -o "out/r8s-inspection/source/decoded/$relative" "$root/$relative"
           done
           cp "$TOOLS_DIR/bin/apktool.jar" out/r8s-inspection/
-          find out/r8s-inspection/source/original -type f -exec sha256sum {} + > out/r8s-inspection/source-sha256.txt
+          find out/r8s-inspection/source/original out/r8s-inspection/target/original -type f -exec sha256sum {} + > out/r8s-inspection/input-sha256.txt
       - name: Retain firmware inputs for offline patch and HAL review
         uses: actions/upload-artifact@v4
         with:
