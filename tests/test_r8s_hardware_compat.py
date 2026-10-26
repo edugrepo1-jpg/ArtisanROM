@@ -76,7 +76,7 @@ SRC_DIR="$TEST_SOURCE"
         result = subprocess.run([BASH, '-c', script], env=env, cwd=ROOT, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         values = {node.tag: node.text for node in ET.parse(source).getroot()}
-        self.assertEqual(set(values[prefix + 'LCD_CONFIG_HFR_SUPPORTED_REFRESH_RATE'].split(',')), {'60', '120'})
+        self.assertEqual(set(values[prefix + 'LCD_CONFIG_HFR_SUPPORTED_REFRESH_RATE'].split(',')), {'60', '96', '120'})
         self.assertEqual(values[prefix + 'LCD_CONFIG_HFR_SUPPORTED_REFRESH_RATE_NS'], '60')
         self.assertEqual(values[prefix + 'LCD_CONFIG_HFR_MODE'], '2')
         self.assertEqual(values[prefix + 'LCD_CONFIG_CONTROL_AUTO_BRIGHTNESS'], '5')

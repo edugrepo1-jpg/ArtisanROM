@@ -109,6 +109,12 @@ REPLACE_KERNEL_BINARIES()
     # 4. Apply the selinux/KSU fixes (must run after the reset above)
     APPLY_SEPOLICY_FIX
 
+    if [[ "$TARGET_CODENAME" == "r8s" ]]; then
+        APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
+            "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-panel-96hz.patch" \
+            "r8s EA8079 96-Hz display mode" || return 1
+    fi
+
     # 5. Execute Build
     LOG "- Starting kernel build process."
     BUILD_KERNEL || { ABORT "Kernel build failed for $TARGET_CODENAME"; return 1; }

@@ -89,7 +89,17 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: Build dependencies
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check host toolchain
+        run: |
+          command -v cargo
+          command -v rustc
+          cargo --version
+          rustc --version
+
+      - name: Build host dependencies
         run: |
           source ./buildenv.sh y2s
           ./scripts/build_dependencies.sh
