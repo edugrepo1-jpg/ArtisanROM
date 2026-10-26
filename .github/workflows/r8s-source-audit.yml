@@ -39,17 +39,22 @@ jobs:
             linux-modules-extra-$(uname -r) pkg-config protobuf-compiler python-is-python3 \
             python3 unzip wget xz-utils zip
           sudo modprobe erofs
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
       - uses: dtolnay/rust-toolchain@stable
+      - name: Identify pinned host tool sources
+        id: tools-key
+        run: echo "tree=$(git rev-parse HEAD:external)" >> "$GITHUB_OUTPUT"
       - name: Restore host tools
         id: tools
         uses: actions/cache@v4
         with:
           path: out/tools
-          key: r8s-host-tools-${{ runner.os }}-${{ hashFiles('.gitmodules', 'external/make.sh', 'external/patches/**') }}
+          key: r8s-host-tools-${{ runner.os }}-${{ steps.tools-key.outputs.tree }}
       - name: Build missing host tools
         run: |
           source ./buildenv.sh r8s
@@ -59,7 +64,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: out/tools
-          key: r8s-host-tools-${{ runner.os }}-${{ hashFiles('.gitmodules', 'external/make.sh', 'external/patches/**') }}
+          key: r8s-host-tools-${{ runner.os }}-${{ steps.tools-key.outputs.tree }}
       - name: Obtain the configured Samsung source and r8s firmware
         run: |
           source ./buildenv.sh r8s
@@ -74,14 +79,17 @@ jobs:
             IFS=/ read -r model csc _ <<< "$firmware"
             root="$FW_DIR/${model}_${csc}"
             cp "$root/.extracted" "out/r8s-inspection/$role/firmware-version.txt"
-            for relative in system/system/build.prop vendor/build.prop vendor/etc/vintf vendor/etc/init \
-              vendor/etc/wifi vendor/etc/bluetooth vendor/etc/selinux; do
+            for relative in system/system/build.prop system/system/etc/floating_feature.xml \
+              system/system/etc/permissions system/system/etc/sysconfig system/system/etc/vintf \
+              system/system/etc/init system/system/etc/ld.config.txt system/system/etc/public.libraries.txt \
+              vendor/build.prop vendor/etc/vintf vendor/etc/init vendor/etc/wifi vendor/etc/bluetooth \
+              vendor/etc/selinux vendor/etc/fstab.exynos990 vendor/etc/audio_policy_configuration.xml; do
               if [ -e "$root/$relative" ]; then
                 mkdir -p "out/r8s-inspection/$role/$(dirname "$relative")"
                 cp -a "$root/$relative" "out/r8s-inspection/$role/$relative"
               fi
             done
-            find "$root/vendor" -type f -printf '%P\n' | LC_ALL=C sort > "out/r8s-inspection/$role/vendor-files.txt"
+            find "$root/vendor" -printf '%y %P -> %l\n' | LC_ALL=C sort > "out/r8s-inspection/$role/vendor-files.txt"
             python3 - "$root" "out/r8s-inspection/$role/vendor-linkage.txt" <<'PY'
           import pathlib, subprocess, sys
           root = pathlib.Path(sys.argv[1])

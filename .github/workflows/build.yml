@@ -61,6 +61,14 @@ jobs:
           java-version: '17'
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+      - name: Identify pinned host tool sources
+        id: tools-key
+        run: echo "tree=$(git rev-parse HEAD:external)" >> "$GITHUB_OUTPUT"
+      - name: Restore inspected host tools
+        uses: actions/cache@v4
+        with:
+          path: out/tools
+          key: r8s-host-tools-${{ runner.os }}-${{ steps.tools-key.outputs.tree }}
       - name: Build host tools
         run: |
           source ./buildenv.sh r8s
@@ -94,6 +102,17 @@ jobs:
             out/r8s-build.log
             out/config.sh
             out/target/r8s/*.log
+          if-no-files-found: ignore
+          retention-days: 5
+      - name: Retain failed patch inputs for offline correction
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8s-patch-context
+          path: |
+            out/target/r8s/apktool/system/framework/services.jar
+            out/target/r8s/apktool/system/framework/framework.jar
+            out/target/r8s/apktool/system/priv-app/SecSettings/SecSettings.apk
           if-no-files-found: ignore
           retention-days: 5
       - name: Retain ROM for device validation

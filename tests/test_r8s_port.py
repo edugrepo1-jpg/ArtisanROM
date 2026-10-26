@@ -86,6 +86,37 @@ class PortTests(unittest.TestCase):
         for file in files:
             ET.parse(file)
 
+    def test_virtual_sound_patch_keeps_driver_and_bluetooth_interfaces(self):
+        tree = self.tmp / 'apktool'
+        helper = tree / 'system/framework/services.jar/smali_classes8/com/android/server/vibrator/VirtualVibSoundHelper.smali'
+        controller = tree / 'system/priv-app/SecSettings/SecSettings.apk/smali_classes9/com/samsung/android/settings/asbase/vibration/VirtualVibrationSoundPreferenceController.smali'
+        helper.parent.mkdir(parents=True)
+        controller.parent.mkdir(parents=True)
+        constructor = '.method public constructor <init>()V\n    .locals 0\n    invoke-direct {p0}, Ljava/lang/Object;-><init>()V\n    return-void\n.end method\n'
+        helper.write_text('.class public Lcom/android/server/vibrator/VirtualVibSoundHelper;\n.super Ljava/lang/Object;\n' + constructor +
+            '.method public playVirtualSoundIfNeeded(Ljava/lang/String;Landroid/os/VibrationAttributes;Z)V\n    .locals 1\n    const/4 v0, 0x1\n    return-void\n.end method\n' +
+            '.method public stopVirtualSound(Ljava/lang/String;)V\n    .locals 1\n    const/4 v0, 0x1\n    return-void\n.end method\n')
+        controller.write_text('.class public Lcom/samsung/android/settings/asbase/vibration/VirtualVibrationSoundPreferenceController;\n.super Ljava/lang/Object;\n' +
+            '.method public getAvailabilityStatus()I\n    .locals 1\n    const/4 v0, 0x0\n    return v0\n.end method\n')
+        bt = tree / 'system/framework/services.jar/smali/com/android/server/audio/BtHelper.smali'
+        bt.parent.mkdir(parents=True)
+        bt.write_bytes(b'Bluetooth routing must be preserved\n')
+        script = '''set -e
+. "$SRC_DIR/scripts/utils/smali_utils.sh"
+DECODE_APK() { :; }
+LOG() { :; }
+ABORT() { printf '%s\\n' "$1" >&2; return 1; }
+. "$SRC_DIR/unica/patches/product_feature/audio/virtual_vib/disable_native.sh"
+'''
+        result = self.bash(script, SRC_DIR=ROOT, APKTOOL_DIR=tree)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        text = helper.read_text()
+        self.assertIn(constructor, text)
+        self.assertNotIn('const/4 v0, 0x1', text)
+        self.assertEqual(text.count('.method '), 3)
+        self.assertIn('const/4 p0, 0x3', controller.read_text())
+        self.assertEqual(bt.read_bytes(), b'Bluetooth routing must be preserved\n')
+
     def test_real_aarch64_v6_is_accepted(self):
         path = self.tmp / SONAME
         path.write_bytes(elf())
@@ -115,7 +146,7 @@ class PortTests(unittest.TestCase):
         donor = fw / ("system/lib64" if flat else "system/system/lib64") / SONAME
         donor.parent.mkdir(parents=True)
         donor.write_bytes(elf(elf_class=1) if wrong else elf())
-        (fw / ".extracted").write_text("reference")
+        (fw / ".extracted").write_text("S901BXXSOGZH3/S901BOXMOGZH3/S901BXXSOGZH3/S901BXXSOGZH3")
         trace = self.tmp / "copy-trace"
         script = r'''
 LOG() { :; }; ABORT() { printf '%s\n' "$1" >&2; return 1; }
