@@ -22,7 +22,7 @@ jobs:
         with:
           submodules: recursive
       - name: Validate source integration
-        run: python3 tests/test_r8s_port.py
+        run: python3 -m unittest discover -s tests -v
       - name: Free runner disk
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL

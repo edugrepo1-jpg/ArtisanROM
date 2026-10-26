@@ -207,6 +207,25 @@ ADD_TO_WORK_DIR() {
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "")
 
+    def test_r8s_hfr_keeps_native_frame_scheduling(self):
+        script = '''
+SET_PROP() { printf '%s|%s|%s\\n' "$1" "$2" "$3"; }
+LOG() { :; }
+. "$SRC_DIR/target/r8s/patches/hfr/customize.sh"
+'''
+        for native in ("true", "false"):
+            result = self.bash(script, SRC_DIR=ROOT, SOURCE_USE_NATIVE_DISPLAY_STACK=native)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            props = dict(line.split("|", 2)[1:] for line in result.stdout.splitlines())
+            self.assertEqual(props["ro.surface_flinger.set_idle_timer_ms"], "250")
+            self.assertEqual(props["ro.surface_flinger.set_touch_timer_ms"], "300")
+            self.assertEqual(props["ro.surface_flinger.enable_frame_rate_override"], "true")
+            timing = "debug.sf.high_fps_late_sf_phase_offset_ns"
+            if native == "true":
+                self.assertFalse(any(key.startswith("debug.sf.") for key in props))
+            else:
+                self.assertEqual(props[timing], "0")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
