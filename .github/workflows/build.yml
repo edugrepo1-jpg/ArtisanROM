@@ -25,9 +25,9 @@ jobs:
         run: python3 -m unittest discover -s tests -v
       - name: Free runner disk
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          sudo docker image prune --all --force
-          sudo docker builder prune --all --force
+          sudo -n rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo -n docker image prune --all --force
+          sudo -n docker builder prune --all --force
       - name: Free unused toolchains
         uses: jlumbroso/free-disk-space@main
         with:
@@ -38,18 +38,14 @@ jobs:
           retain: compiler_cmake
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+          sudo -n apt-get update
+          sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y \
             attr bc bison brotli build-essential ccache clang cpio curl flex \
             ffmpeg g++-aarch64-linux-gnu gcc-aarch64-linux-gnu git jq \
             libbrotli-dev libbz2-dev libelf-dev libfuse-dev libgtest-dev \
             liblz4-dev libpcre2-dev libprotobuf-dev libssl-dev libunwind-dev \
-            libzstd-dev linux-modules-extra-$(uname -r) lld lz4 patchelf \
+            libzstd-dev lld lz4 patchelf \
             protobuf-compiler python-is-python3 python3 rsync unzip webp wget xz-utils zip
-          wget -O mkbootimg.py https://raw.githubusercontent.com/kdrag0n/kramflash/refs/heads/master/mkbootimg.py
-          chmod +x mkbootimg.py
-          sudo ln -sf "$PWD/mkbootimg.py" /usr/local/bin/mkbootimg
-          sudo modprobe erofs f2fs
           git config --global user.name 'github-actions[bot]'
           git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
           # Upstream supports unofficial signing with its bundled AOSP keys.

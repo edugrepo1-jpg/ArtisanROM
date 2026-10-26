@@ -6,7 +6,15 @@ on:
     paths:
       - 'target/r8s/**'
       - 'platform/exynos990/patches/artisankrnl/**'
-      - 'tests/test_r8s_port.py'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'unica/patches/camera/**'
+      - 'unica/patches/__floating_feature/**'
+      - 'unica/patches/cidmanager/**'
+      - 'unica/patches/bluetooth/**'
+      - 'unica/patches/product_feature/audio/virtual_vib/**'
+      - 'unica/mods/csc/**'
+      - 'unica/mods/settings/**'
       - '.github/workflows/r8s-port-checks.yml'
 
 jobs:
@@ -15,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Check r8s source integration
-        run: python3 tests/test_r8s_port.py
+        run: python3 -B -m unittest discover -s tests -v
       - name: Check Bash syntax
         run: |
           bash -n platform/exynos990/patches/artisankrnl/customize.sh

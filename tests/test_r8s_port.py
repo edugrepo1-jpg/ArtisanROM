@@ -58,6 +58,7 @@ class PortTests(unittest.TestCase):
         for name, expected in {
             "TARGET_CODENAME": '"r8s"', "TARGET_ASSERT_MODEL": '"SM-G780F"',
             "TARGET_PLATFORM": '"exynos990"', "TARGET_SUPER_PARTITION_SIZE": '"9437184000"',
+            "TARGET_PLATFORM_SDK_VERSION": '"33"', "TARGET_BOARD_API_LEVEL": '"30"',
             "TARGET_GROUP_BASIC_SIZE": '"9432989696"',
             "TARGET_FINGERPRINT_CONFIG_SENSOR": '"google_touch_display_optical,settings=3"',
             "TARGET_AUDIO_SUPPORT_VIRTUAL_VIBRATION_SOUND": '"false"',

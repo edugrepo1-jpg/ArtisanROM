@@ -22,21 +22,24 @@ jobs:
             scripts
             external
             security
-            unica/configs
+            unica
+            tests
             platform/exynos990
             target/r8s
+      - name: Validate r8s integration before firmware preparation
+        run: python3 -B -m unittest discover -s tests -v
       - name: Free unused runner storage
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          sudo docker image prune --all --force
+          sudo -n rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo -n docker image prune --all --force
       - name: Install firmware inspection dependencies
         run: |
-          sudo apt-get update
-          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          sudo -n apt-get update
+          sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             attr bc binutils brotli build-essential clang cmake cpio curl ffmpeg file git lld lz4 patchelf \
             libbrotli-dev libbz2-dev libelf-dev libfuse-dev libgtest-dev liblz4-dev \
             libpcre2-dev libprotobuf-dev libssl-dev libunwind-dev libzstd-dev \
-            linux-modules-extra-$(uname -r) pkg-config protobuf-compiler python-is-python3 \
+            pkg-config protobuf-compiler python-is-python3 \
             p7zip-full perl python3 rsync unzip webp wget xxd xz-utils zip zstd
           # Check the shared firmware helper's actual list before spending time on tools.
           python3 - <<'PY_CHECK'
@@ -47,7 +50,6 @@ jobs:
           missing = [tool for tool in shlex.split(match[1]) if shutil.which(tool) is None]
           if missing: raise SystemExit('Missing host dependencies: ' + ' '.join(missing))
           PY_CHECK
-          sudo modprobe erofs
           git config --global user.name 'github-actions[bot]'
           git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
       - uses: actions/setup-java@v5
@@ -92,9 +94,12 @@ jobs:
               system/system/etc/permissions system/system/etc/sysconfig system/system/etc/vintf \
               system/system/etc/init system/system/etc/ld.config.txt system/system/etc/public.libraries.txt \
               system/system/etc/task_profiles.json system/system/etc/cgroups.json \
-              system/system/etc/init/hw system/system/product/build.prop system/system/system_ext/build.prop \
+              system/system/product/build.prop system/system/system_ext/build.prop \
               system/system/product/etc/task_profiles.json system/system/system_ext/etc/task_profiles.json \
-              vendor/etc/task_profiles.json vendor/etc/cgroups.json odm/build.prop odm/etc/vintf odm/etc/init \
+              vendor/etc/task_profiles.json vendor/etc/cgroups.json vendor/etc/permissions vendor/etc/sensors \
+              vendor/etc/gnss vendor/etc/gps.conf vendor/etc/camera vendor/etc/audio vendor/etc/usb \
+              product/etc/build.prop product/build.prop system_ext/etc/build.prop system_ext/build.prop \
+              odm/build.prop odm/etc/build.prop odm/etc/vintf odm/etc/init \
               vendor/build.prop vendor/etc/vintf vendor/etc/init vendor/etc/wifi vendor/etc/bluetooth \
               vendor/etc/selinux vendor/etc/fstab.exynos990 vendor/etc/audio_policy_configuration.xml; do
               if [ -e "$root/$relative" ]; then
@@ -103,7 +108,10 @@ jobs:
               fi
             done
             for relative in framework/services.jar framework/framework.jar framework/ssrm.jar framework/sdhms.jar \
-              framework/framework-res.apk priv-app/SecSettings/SecSettings.apk \
+              framework/framework-res.apk framework/telephony-common.jar framework/ims-common.jar \
+              priv-app/TeleService/TeleService.apk priv-app/SecSettingsIntelligence/SecSettingsIntelligence.apk \
+              app/NfcNci/NfcNci.apk priv-app/NfcNci/NfcNci.apk app/SecureElement/SecureElement.apk \
+              priv-app/SecSettings/SecSettings.apk \
               priv-app/SettingsProvider/SettingsProvider.apk priv-app/BiometricSetting/BiometricSetting.apk \
               priv-app/SamsungDeviceHealthManagerService/SamsungDeviceHealthManagerService.apk \
               priv-app/SamsungCamera/SamsungCamera.apk system_ext/priv-app/SystemUI/SystemUI.apk \
@@ -112,6 +120,26 @@ jobs:
                 mkdir -p "out/r8s-inspection/$role/original/$(dirname "$relative")"
                 cp "$root/system/system/$relative" "out/r8s-inspection/$role/original/$relative"
               fi
+            done
+            for relative in os_partitions_metadata.txt boot.img_metadata.txt dtbo.img_metadata.txt \
+              fs_config-vendor file_context-vendor fs_config-system file_context-system; do
+              if [ -f "$root/$relative" ]; then cp "$root/$relative" "out/r8s-inspection/$role/"; fi
+            done
+            for partition in vendor odm; do
+              for folder in bin etc lib lib64; do
+                [ -d "$root/$partition/$folder" ] || continue
+                find "$root/$partition/$folder" -type f \
+                  \( -iname '*sensor*' -o -iname '*fingerprint*' -o -iname '*gnss*' -o -iname '*gps*' \
+                  -o -iname '*nfc*' -o -iname '*bluetooth*' -o -iname '*secril*' -o -name 'rild' \
+                  -o -iname '*camera*provider*' -o -iname '*audio*' -o -iname '*wifi*' \
+                  -o -iname '*supplicant*' -o -iname '*hostapd*' -o -iname '*power*' -o -iname '*usb*' \
+                  -o -iname '*display*' -o -iname '*light*' -o -iname '*wfd*' \) -print0 | \
+                while IFS= read -r -d '' file; do
+                  relative="${file#"$root/"}"
+                  mkdir -p "out/r8s-inspection/$role/drivers/$(dirname "$relative")"
+                  cp "$file" "out/r8s-inspection/$role/drivers/$relative"
+                done
+              done
             done
             find "$root/vendor" -printf '%y %P -> %l\n' | LC_ALL=C sort > "out/r8s-inspection/$role/vendor-files.txt"
             find "$root/system" -printf '%y %P -> %l\n' | LC_ALL=C sort > "out/r8s-inspection/$role/system-files.txt"
@@ -141,11 +169,38 @@ jobs:
           done
           cp "$TOOLS_DIR/bin/apktool.jar" out/r8s-inspection/
           find out/r8s-inspection/source/original out/r8s-inspection/target/original -type f -exec sha256sum {} + > out/r8s-inspection/input-sha256.txt
-      - name: Retain firmware inputs for offline patch and HAL review
+      - name: Retain exact source applications
         uses: actions/upload-artifact@v4
         with:
-          name: r8s-exact-firmware-inputs
-          path: out/r8s-inspection
+          name: r8s-source-applications
+          path: out/r8s-inspection/source/original
           if-no-files-found: error
           retention-days: 5
-
+      - name: Retain exact target applications
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8s-stock-applications
+          path: out/r8s-inspection/target/original
+          if-no-files-found: error
+          retention-days: 5
+      - name: Retain original HAL driver inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8s-hardware-drivers
+          path: |
+            out/r8s-inspection/source/drivers
+            out/r8s-inspection/target/drivers
+          if-no-files-found: error
+          retention-days: 5
+      - name: Retain metadata and framework inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8s-framework-and-hardware-metadata
+          path: |
+            out/r8s-inspection
+            !out/r8s-inspection/source/original
+            !out/r8s-inspection/target/original
+            !out/r8s-inspection/source/drivers
+            !out/r8s-inspection/target/drivers
+          if-no-files-found: error
+          retention-days: 5
