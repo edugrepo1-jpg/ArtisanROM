@@ -1,5 +1,5 @@
 id=r8s_hardware_compat
-name=r8s radio and NFC interface compatibility
+name=r8s radio configuration compatibility
 author=ArtisanROM contributors
 version=1
-description=Retains r8s HAL dependencies and the stock SIM-count property bridge without replacing drivers.
+description=Restores the stock dynamic SIM-count property bridge and single-SIM service guard without replacing drivers.

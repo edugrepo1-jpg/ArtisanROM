@@ -1,0 +1,37 @@
+<!--
+    SM-G780F stock G780FXXSOFYJ1 exposes IRadio 1.4, ISap 1.2 and
+    IRadioConfig 1.1. Its libril_sem.so links radio interfaces through 1.4.
+    Override the common Exynos declaration without changing other targets
+    or replacing the target RIL with a different device's implementation.
+-->
+<manifest version="1.0" type="device">
+    <hal override="true" format="hidl">
+        <name>android.hardware.radio.deprecated</name>
+        <transport>hwbinder</transport>
+    </hal>
+    <hal override="true" format="hidl">
+        <name>android.hardware.radio</name>
+        <transport>hwbinder</transport>
+    </hal>
+    <hal override="true" format="hidl">
+        <name>android.hardware.radio</name>
+        <transport>hwbinder</transport>
+        <fqname>@1.4::IRadio/slot1</fqname>
+        <fqname>@1.4::IRadio/slot2</fqname>
+        <fqname>@1.2::ISap/slot1</fqname>
+        <fqname>@1.2::ISap/slot2</fqname>
+    </hal>
+    <hal override="true" format="hidl">
+        <name>android.hardware.radio.config</name>
+        <transport>hwbinder</transport>
+    </hal>
+    <hal override="true" format="hidl">
+        <name>android.hardware.radio.config</name>
+        <transport>hwbinder</transport>
+        <version>1.1</version>
+        <interface>
+            <name>IRadioConfig</name>
+            <instance>default</instance>
+        </interface>
+    </hal>
+</manifest>
