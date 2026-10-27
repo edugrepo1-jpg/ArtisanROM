@@ -1,5 +1,6 @@
 """Exercise camera selection and actual feature-XML updates without firmware."""
 import os
+import importlib.util
 from pathlib import Path
 import subprocess
 import tempfile
@@ -112,6 +113,35 @@ DECODE_APK() { :; }
             result, value = self.hdr(nodes, target=target, sdk=sdk, implementations=False)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual(value, nodes)
+
+    def test_test7_front_mode_alias_preserves_every_other_camera_feature(self):
+        spec = importlib.util.spec_from_file_location('r8s_camera_modes', ROOT / 'target/r8s/normalize_camera_modes.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        original = (ROOT / 'target/r8s/camera/camera-feature.xml').read_text()
+        normalized = module.normalize(original)
+        old_root, new_root = ET.fromstring(original), ET.fromstring(normalized)
+        old_nodes, new_nodes = list(old_root.iter()), list(new_root.iter())
+        self.assertEqual(len(old_nodes), len(new_nodes))
+        changed = 0
+        for old, new in zip(old_nodes, new_nodes):
+            expected = dict(old.attrib)
+            if old.get('name') == 'SHOOTING_MODE_LIVE_FOCUS':
+                expected['front'] = 'SELFIE_FOCUS'
+                changed += 1
+            self.assertEqual(new.attrib, expected)
+            self.assertEqual(new.tag, old.tag)
+            self.assertEqual(new.text, old.text)
+        self.assertEqual(changed, 1)
+        self.assertEqual(module.normalize(normalized), normalized)
+
+    def test_front_mode_helper_runs_after_the_xml_is_staged(self):
+        source = (ROOT / 'unica/patches/camera/customize.sh').read_text()
+        self.assertLess(source.index('cp -a \\"$SRC_DIR/target/$TARGET_CODENAME/camera/camera-feature.xml'),
+                        source.index('. "$MODPATH/r8s_modes.sh"'))
+        helper = (ROOT / 'unica/patches/camera/r8s_modes.sh').read_text()
+        self.assertIn('"$TARGET_CODENAME" == "r8s"', helper)
+        self.assertIn('"$SOURCE_PLATFORM_SDK_VERSION" -ge 36', helper)
 
 
 if __name__ == "__main__":
