@@ -25,14 +25,14 @@ class HardwareCompatibilityTests(unittest.TestCase):
         self.assertNotIn('setprop ro.telephony.sim_slots.count 2', rc)
         self.assertIn('on property:ro.vendor.multisim.simslotcount=1\n    stop ril-daemon1', rc)
 
-    def test_radio_manifest_advertises_stock_r8s_interfaces_for_both_slots(self):
+    def test_radio_manifest_matches_running_wrapper_and_retains_stock_sap(self):
         relative = 'vendor/etc/vintf/manifest/vendor.samsung.hardware.radio_manifest_2_30.xml'
         target = ROOT / 'target/r8s/patches/vendor' / relative
         platform = ROOT / 'platform/exynos990/patches/vendor' / relative
         declarations = ET.parse(target).findall('hal')
         radio = [node for node in declarations if node.findtext('name') == 'android.hardware.radio']
         names = {node.text for hal in radio for node in hal.findall('fqname')}
-        self.assertEqual(names, {'@1.4::IRadio/slot1', '@1.4::IRadio/slot2',
+        self.assertEqual(names, {'@1.5::IRadio/slot1', '@1.5::IRadio/slot2',
                                  '@1.2::ISap/slot1', '@1.2::ISap/slot2'})
         self.assertTrue(all(node.get('override') == 'true' for node in radio))
         config = [node for node in declarations if node.findtext('name') == 'android.hardware.radio.config']

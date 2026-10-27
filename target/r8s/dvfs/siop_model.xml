@@ -62,7 +62,6 @@
             <GDM    formula="AP*BAT" temp="430.400" />
             <GDMLTB formula="AP*BAT" temp="450.420" />
             <SS     formula="AP*BAT*PA" temp="580.450.690" />
-            <FPS    formula="LRP"     temp="430"     />
             <DEX    formula="LRP"     temp="450"     />
         </complex>
     </overheatcontrol>
@@ -83,7 +82,7 @@
 
         <component name="DISPLAY" tempType="LRP">
             <limiter name="Brightness" temp="390" value="-1:193:130" />
-            <limiter name="LimitHrr" temp="460" value="-1:1" />
+            <limiter name="LimitHrr" temp="430" value="-1:1" />
             <limiter name="MultiWindow" temp="450:470:500" value="-1:1:1" delay="0:300:0" />
         </component>
 

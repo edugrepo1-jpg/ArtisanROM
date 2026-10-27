@@ -1,8 +1,8 @@
 <!--
-    SM-G780F stock G780FXXSOFYJ1 exposes IRadio 1.4, ISap 1.2 and
-    IRadioConfig 1.1. Its libril_sem.so links radio interfaces through 1.4.
-    Override the common Exynos declaration without changing other targets
-    or replacing the target RIL with a different device's implementation.
+    The integrated Exynos RIL wrapper registers IRadio 1.5 for both slots.
+    Advertising only the stock modem library's 1.4 interface prevents that
+    wrapper from registering. Keep ISap 1.2, IRadioConfig 1.1 and the existing
+    modem libraries unchanged.
 -->
 <manifest version="1.0" type="device">
     <hal override="true" format="hidl">
@@ -16,8 +16,8 @@
     <hal override="true" format="hidl">
         <name>android.hardware.radio</name>
         <transport>hwbinder</transport>
-        <fqname>@1.4::IRadio/slot1</fqname>
-        <fqname>@1.4::IRadio/slot2</fqname>
+        <fqname>@1.5::IRadio/slot1</fqname>
+        <fqname>@1.5::IRadio/slot2</fqname>
         <fqname>@1.2::ISap/slot1</fqname>
         <fqname>@1.2::ISap/slot2</fqname>
     </hal>
