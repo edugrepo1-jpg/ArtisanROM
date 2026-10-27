@@ -234,7 +234,7 @@ diff --git a/drivers/battery_v2/sec_battery_sysfs.c b/drivers/battery_v2/sec_bat
  	case BATT_LP_CHARGING:
  		if (lpcharge) {
  			i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n", lpcharge ? 1 : 0);
-@@ -1894,6 +1900,23 @@
+@@ -1894,6 +1900,24 @@
  						&battery->monitor_work, 0);
  			ret = count;
  		}
@@ -253,6 +253,7 @@ diff --git a/drivers/battery_v2/sec_battery_sysfs.c b/drivers/battery_v2/sec_bat
 +				__func__, x, battery->siop_level);
 +			wake_lock(&battery->siop_level_wake_lock);
 +			queue_delayed_work(battery->monitor_wqueue, &battery->siop_level_work, 0);
++			queue_delayed_work(battery->monitor_wqueue, &battery->monitor_work, 0);
 +		}
 +		ret = count;
  		break;

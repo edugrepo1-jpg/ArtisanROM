@@ -1,5 +1,6 @@
 """Host contracts for the optional r8s policy; these do not certify charging hardware."""
 import os
+import hashlib
 from pathlib import Path
 import re
 import shutil
@@ -26,6 +27,38 @@ def function(source, name):
 
 
 class ChargingPatchTests(unittest.TestCase):
+    def test_dt_patch_preserves_mixed_line_endings_through_git_storage(self):
+        # Exact bpf111 r8s.cfg is CRLF while build.sh is LF. Testing only
+        # the working copy missed Git's former LF normalization on upload.
+        patch = PATCH_DIR / 'r8s-dt-table-revisions.patch'
+        data = patch.read_bytes()
+        relative = patch.relative_to(ROOT).as_posix()
+        result = subprocess.run(['git', 'hash-object', '-w', '--path=' + relative, '--stdin'],
+                                input=data, cwd=ROOT, capture_output=True, check=True)
+        stored = subprocess.check_output(['git', 'cat-file', 'blob', result.stdout.decode().strip()], cwd=ROOT)
+        self.assertEqual(stored, data, 'Git normalized the CRLF patch context')
+        self.assertEqual(result.stdout.decode().strip(),
+                         hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest())
+        fixture = ('exynos990-r8s_eur_open_00.dtbo\n  custom0=0x00000000\n  custom1=0x01000000\n\n'
+                   'exynos990-r8s_eur_open_02.dtbo\n  custom0=0x02000000\n  custom1=0x04000000\n\n'
+                   'exynos990-r8s_eur_open_05.dtbo\n  custom0=0x05000000\n  custom1=0xff000000\n').replace('\n', '\r\n').encode()
+        with tempfile.TemporaryDirectory(prefix='r8s-dt-committed-') as directory:
+            stage = Path(directory)
+            cfg = stage / 'build/dtconfigs/r8s.cfg'
+            cfg.parent.mkdir(parents=True)
+            cfg.write_bytes(fixture)
+            first_hunk = stored.split(b'diff --git a/build.sh', 1)[0]
+            change = stage / 'dt.patch'
+            change.write_bytes(first_hunk)
+            subprocess.run(['git', '-c', 'core.autocrlf=false', 'apply', str(change)],
+                           cwd=stage, check=True, capture_output=True)
+            expected = fixture.replace(b'custom1=0x01000000', b'custom1=0x00000001').replace(
+                b'custom0=0x02000000', b'custom0=0x00000002').replace(
+                b'custom1=0x04000000', b'custom1=0x00000004').replace(
+                b'custom0=0x05000000', b'custom0=0x00000005').replace(
+                b'custom1=0xff000000', b'custom1=0x000000ff')
+            self.assertEqual(cfg.read_bytes(), expected)
+
     def test_patch_scope_and_preserved_limits(self):
         for patch in PATCHES:
             source = (PATCH_DIR / patch).read_text()
@@ -99,6 +132,15 @@ class ExactChargingTests(unittest.TestCase):
         for name in ('sec_bat_get_wireless_current', 'sec_bat_check_lrp_temp',
                      'sec_bat_set_charge'):
             self.assertEqual(function(old, name), function(self.source, name))
+
+    def test_switch_refreshes_current_and_the_regular_monitor_like_archived_v3(self):
+        source = (self.directory / INPUTS[1]).read_text()
+        setter = function(source, 'sec_bat_store_attrs')
+        case = setter.split('\tcase CHARGE_MAX_MODE:', 1)[1].split('\tcase BATT_LP_CHARGING:', 1)[0]
+        self.assertIn('kstrtoint(buf, 10, &x)', case)
+        self.assertIn('if (x != 0 && x != 1)', case)
+        self.assertIn('&battery->siop_level_work, 0', case)
+        self.assertIn('&battery->monitor_work, 0', case)
 
     def test_patch_reverse_restores_all_original_bytes(self):
         # Reverse checks also cover the repeat-build "already applied" branch.

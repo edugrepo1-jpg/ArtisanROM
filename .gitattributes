@@ -42,3 +42,7 @@ target/t2s/patches/variants/vendor/** binary
 # Pin native display executables without text normalization.
 target/r8s/blobs/display/system/bin/surfaceflinger binary
 target/y2s/blobs/display/system/bin/surfaceflinger binary
+
+# This patch spans a CRLF dtconfig and an LF shell script. Preserve each
+# hunk's original line endings instead of normalizing its context at commit.
+platform/exynos990/patches/artisankrnl/r8s-dt-table-revisions.patch -text !eol

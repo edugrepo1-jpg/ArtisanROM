@@ -17,6 +17,16 @@ jobs:
     steps:
       - name: Checkout port source
         uses: actions/checkout@v7
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.gitattributes
+            /scripts/internal/build_r8s_chargemax_kernel.sh
+            /scripts/internal/check_r8s_boot_tables.py
+            /tests/test_r8s_charging_policy.py
+            /platform/exynos990/patches/artisankrnl/
+      - name: Validate stored patch bytes before downloading the kernel
+        run: python3 -B -m unittest discover -s tests -p test_r8s_charging_policy.py -v
       - name: Install kernel prerequisites
         run: |
           sudo -n apt-get update
