@@ -26,8 +26,9 @@ git -C "$KERNEL_DIR" submodule update --init --recursive
 
 git -C "$KERNEL_DIR/KernelSU-Next" apply --check "$PATCH_DIR/kernelsu-sepolicy-fix.patch"
 git -C "$KERNEL_DIR/KernelSU-Next" apply "$PATCH_DIR/kernelsu-sepolicy-fix.patch"
+echo "3e4d20c8b0de6f5d20b701fb8be3fb3cdd409da7dcb01df985598ececd3afaac  $PATCH_DIR/r8s-chargemax-v3-original.patch" | sha256sum --check
 for patch in r8s-dt-table-revisions.patch r8s-panel-96hz.patch \
-             r8s-fixed-pdo-selection.patch r8s-chargemax-opt-in.patch; do
+             r8s-chargemax-v3-original.patch; do
     git -C "$KERNEL_DIR" apply --check "$PATCH_DIR/$patch"
     git -C "$KERNEL_DIR" apply "$PATCH_DIR/$patch"
 done
@@ -48,7 +49,7 @@ PY
 
 # Exercise the actual C charging helper, not a Python reimplementation.
 export R8S_CHARGING_KERNEL_DIR="$KERNEL_DIR"
-# The tests expect unmodified inputs and apply the two charging patches.
+# The tests expect unmodified inputs and apply the intact recovered V3 patch.
 FIXTURE="$ROOT/out/chargemax-original-inputs"
 for file in drivers/battery_v2/sec_battery.c drivers/battery_v2/sec_battery_sysfs.c \
             drivers/battery_v2/sec_step_charging.c drivers/battery_v2/include/sec_battery.h \
@@ -82,7 +83,8 @@ manifest = {
     'kernel_commit': os.environ['KERNEL_COMMIT'],
     'ksu_commit': os.environ['KSU_COMMIT'],
     'target': 'SM-G780F/r8s', 'charge_max_default': 1,
-    'purpose': 'User-requested ChargeMax ON test variant; normal ROM remains opt-in/OFF.',
+    'original_patch_sha256': '3e4d20c8b0de6f5d20b701fb8be3fb3cdd409da7dcb01df985598ececd3afaac',
+    'purpose': 'Intact recovered ChargeMax V3; separate user-requested ON initialization for this test only.',
     'flashable': False,
     'packaging': 'Replace only the kernel in the known boot59 template; preserve its ramdisk and DTB, and retain installed DTBO.',
     'sha256': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(out.iterdir()) if p.is_file()},

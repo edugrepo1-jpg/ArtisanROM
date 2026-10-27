@@ -10,7 +10,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PATCH_DIR = ROOT / 'platform/exynos990/patches/artisankrnl'
-PATCHES = ['r8s-fixed-pdo-selection.patch', 'r8s-chargemax-opt-in.patch']
+PATCHES = ['r8s-chargemax-v3-original.patch']
+ORIGINAL_V3_SHA256 = '3e4d20c8b0de6f5d20b701fb8be3fb3cdd409da7dcb01df985598ececd3afaac'
 INPUTS = ['drivers/battery_v2/' + p for p in [
     'sec_battery.c', 'sec_battery_sysfs.c', 'sec_step_charging.c',
     'include/sec_battery.h', 'include/sec_battery_sysfs.h']]
@@ -68,9 +69,10 @@ class ChargingPatchTests(unittest.TestCase):
             result = subprocess.run(['git', '-c', 'core.autocrlf=false', 'apply', '--numstat', str(PATCH_DIR / patch)],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-        source = (PATCH_DIR / PATCHES[1]).read_text()
+        self.assertEqual(hashlib.sha256((PATCH_DIR / PATCHES[0]).read_bytes()).hexdigest(), ORIGINAL_V3_SHA256)
+        source = (PATCH_DIR / PATCHES[0]).read_text()
         self.assertIn('+\tbattery->charge_max_mode = false;', source)
-        self.assertIn('kstrtoint(buf, 10, &x)', source)
+        self.assertIn('sscanf(buf, "%10d\\n", &x)', source)
         self.assertIn('if (x != 0 && x != 1)', source)
         changed = '\n'.join(line for line in source.splitlines()
                             if line.startswith(('+', '-')) and not line.startswith(('+++', '---')))
@@ -136,8 +138,8 @@ class ExactChargingTests(unittest.TestCase):
     def test_switch_refreshes_current_and_the_regular_monitor_like_archived_v3(self):
         source = (self.directory / INPUTS[1]).read_text()
         setter = function(source, 'sec_bat_store_attrs')
-        case = setter.split('\tcase CHARGE_MAX_MODE:', 1)[1].split('\tcase BATT_LP_CHARGING:', 1)[0]
-        self.assertIn('kstrtoint(buf, 10, &x)', case)
+        case = re.split(r'\n\tcase ', setter.split('\tcase CHARGE_MAX_MODE:', 1)[1], 1)[0]
+        self.assertIn('sscanf(buf, "%10d\\n", &x)', case)
         self.assertIn('if (x != 0 && x != 1)', case)
         self.assertIn('&battery->siop_level_work, 0', case)
         self.assertIn('&battery->monitor_work, 0', case)
@@ -156,7 +158,7 @@ class ExactChargingTests(unittest.TestCase):
                 self.assertEqual((dest / path).read_bytes(), data)
 
     @unittest.skipUnless(os.environ.get('R8S_CHARGING_CC'), 'Optional native C compiler not configured')
-    def test_actual_c_helpers_and_fixed_pdo_selection(self):
+    def test_actual_c_helpers_and_original_pdo_policy(self):
         helpers = '\n'.join(function(self.source, n) for n in [
             'sec_bat_charge_max_mode_active', 'sec_bat_effective_charge_siop', 'sec_bat_change_vbus_pd'])
         harness = r'''
@@ -202,7 +204,7 @@ int main(void) {
  for (int raw=0; raw<=100; raw++) {
   b.charge_max_mode=enabled; b.charging_enabled=charging;
   b.store_mode=store; b.cable_type=cable; b.siop_level=raw;
-  int expected=(enabled && charging && !store && is_wired_type(cable) && raw>0) ? 100 : raw;
+  int expected=(enabled && charging && !store && is_wired_type(cable)) ? 100 : raw;
   assert(sec_bat_effective_charge_siop(&b)==expected);
   assert(b.siop_level==raw); count++;
  }
@@ -213,11 +215,7 @@ int main(void) {
  int input=3000;
  b.input_current=3000; b.pdic_ps_rdy=true;
  assert(sec_bat_change_vbus_pd(&b,&input));
-#ifdef CONFIG_PDIC_PD30
- assert(selected==2 && input==1100 && programmed==1100);
-#else
  assert(selected==4 && input==1300 && programmed==1300);
-#endif
  assert(!b.pdic_ps_rdy);
  assert(!sec_bat_change_vbus_pd(&b,&input)); /* Pending negotiation. */
  b.current_event=0; b.pd_list.now_pd_index=1; b.siop_level=50;
@@ -228,12 +226,8 @@ int main(void) {
  assert(!sec_bat_change_vbus_pd(&b,&input));
  b.store_mode=false; b.charging_enabled=false;
  assert(!sec_bat_change_vbus_pd(&b,&input));
-#ifdef CONFIG_PDIC_PD30
- b.charging_enabled=true; b.pd_list.num_fpdo=0;
+ b.charging_enabled=true; b.pd_list.max_pd_count=MAX_PDO_NUM+1;
  assert(!sec_bat_change_vbus_pd(&b,&input));
- b.pd_list.num_fpdo=MAX_PDO_NUM+1;
- assert(!sec_bat_change_vbus_pd(&b,&input));
-#endif
  printf("%d native C policy cases plus PDO negotiation guards passed\n",count);
  return 0;
 }
