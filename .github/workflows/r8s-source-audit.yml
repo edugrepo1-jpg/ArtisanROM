@@ -36,7 +36,7 @@ jobs:
         run: |
           sudo -n apt-get update
           sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            attr bc binutils brotli build-essential clang cmake cpio curl ffmpeg file git lld lz4 patchelf \
+            attr bc binutils brotli build-essential clang cmake cpio curl f2fs-tools ffmpeg file git kmod lld lz4 patchelf \
             libbrotli-dev libbz2-dev libelf-dev libfuse-dev libgtest-dev liblz4-dev \
             libpcre2-dev libprotobuf-dev libssl-dev libunwind-dev libzstd-dev \
             pkg-config protobuf-compiler python-is-python3 \
@@ -52,6 +52,8 @@ jobs:
           PY_CHECK
           git config --global user.name 'github-actions[bot]'
           git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Verify host F2FS support before firmware downloads
+        run: bash scripts/internal/prepare_ci_filesystems.sh
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

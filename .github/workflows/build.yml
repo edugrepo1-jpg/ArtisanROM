@@ -41,7 +41,7 @@ jobs:
           sudo -n apt-get update
           sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y \
             attr bc bison brotli build-essential ccache clang cpio curl flex \
-            ffmpeg g++-aarch64-linux-gnu gcc-aarch64-linux-gnu git jq \
+            f2fs-tools ffmpeg g++-aarch64-linux-gnu gcc-aarch64-linux-gnu git jq kmod \
             libbrotli-dev libbz2-dev libelf-dev libfuse-dev libgtest-dev \
             liblz4-dev libpcre2-dev libprotobuf-dev libssl-dev libunwind-dev \
             libzstd-dev lld lz4 patchelf \
@@ -50,6 +50,8 @@ jobs:
           git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
           # Upstream supports unofficial signing with its bundled AOSP keys.
           # Do not create empty official keys from absent upstream secrets.
+      - name: Verify host F2FS support before firmware downloads
+        run: bash scripts/internal/prepare_ci_filesystems.sh
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
