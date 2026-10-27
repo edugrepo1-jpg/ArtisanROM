@@ -458,6 +458,10 @@ if [[ "$SOURCE_FINGERPRINT_CONFIG_SENSOR" != "$TARGET_FINGERPRINT_CONFIG_SENSOR"
                     # already consume the optical feature exposed above and
                     # their classes/control flow have since been redesigned.
                     LOG "Using native Android 16 optical fingerprint UI"
+                    if [[ "$TARGET_CODENAME" == "r8s" ]]; then
+                        APPLY_PATCH "system_ext" "priv-app/SystemUI/SystemUI.apk" \
+                            "$MODPATH/fingerprint/optical_fod/SystemUI.apk/0002-Read-optical-sensor-feature-in-native-UI.patch"
+                    fi
                 else
                     APPLY_PATCH "system" "system/priv-app/SecSettings/SecSettings.apk" \
                         "$MODPATH/fingerprint/optical_fod/SecSettings.apk/0001-Add-optical-FOD-support.patch"
