@@ -1,5 +1,5 @@
 id=r8s_hardware_compat
-name=r8s radio configuration compatibility
+name=r8s service initialization compatibility
 author=ArtisanROM contributors
 version=1
-description=Restores the stock dynamic SIM-count property bridge and single-SIM service guard without replacing drivers.
+description=Initializes the r8s display density, native service cpusets and dynamic SIM-count bridge without replacing drivers.
