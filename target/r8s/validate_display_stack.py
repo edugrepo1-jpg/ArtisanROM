@@ -9,8 +9,8 @@ import sys
 
 EXPECTED = {
     'bin/surfaceflinger': '3a7b061c2e23455f354c4174264afeca626b62e13524d596d8c2780b419b3b99',
-    'lib64/libgui.so': '5fb47cc800ec3e8957dfc67ae728114aa660cee9d7b52efc90f30cae8179a20d',
-    'lib64/libui.so': '26eacf681a956c363a06545a709ec218bfc99023ba9bdaca700918901d523479',
+    'lib64/libgui.so': '6cc12b84636fa08318f3d69c9ef48f2c4beb0e79f755b7062da6beb344fdddee',
+    'lib64/libui.so': '66cf7bc7ef40bda9ab6b08cc9a2a05610cd37f753ff89a377e946a1beebd4942',
 }
 
 
