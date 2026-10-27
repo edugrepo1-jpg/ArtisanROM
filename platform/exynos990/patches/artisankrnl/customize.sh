@@ -116,6 +116,14 @@ REPLACE_KERNEL_BINARIES()
         APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
             "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-panel-96hz.patch" \
             "r8s EA8079 96-Hz display mode" || return 1
+        APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
+            "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-fixed-pdo-selection.patch" \
+            "r8s fixed-PD selection within the fixed PDO range" || return 1
+        # Keep ChargeMax opt-in until charging is physically validated. This
+        # port does not raise battery/charger/USB thermal or current limits.
+        APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
+            "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-chargemax-opt-in.patch" \
+            "r8s opt-in ChargeMax wired policy" || return 1
     fi
 
     # 5. Execute Build

@@ -1,0 +1,317 @@
+Subject: [PATCH] r8s: port opt-in Benly ChargeMax v3 wired policy
+
+Archived v3 baseline: 3e4d20c8b0de6f5d20b701fb8be3fb3cdd409da7dcb01df985598ececd3afaac.
+Adapt to Artisan bpf111; preserve SIOP zero, use strict input parsing
+and leave mode OFF at boot pending physical validation. No v4 thermal
+overrides, forced buck-off, global SIOP lock or UI charging-text override.
+Independent thermal/current protections keep their original code and values.
+
+diff --git a/drivers/battery_v2/include/sec_battery.h b/drivers/battery_v2/include/sec_battery.h
+--- a/drivers/battery_v2/include/sec_battery.h
++++ b/drivers/battery_v2/include/sec_battery.h
+@@ -532,6 +532,7 @@
+ 	/* charging disabler */
+ 	bool charging_enabled;
+ 	bool charging_suspended;
++	bool charge_max_mode; /* opt-in wired SIOP policy, off at boot */
+ 
+ 	/* usb suspend */
+ 	int prev_usb_conf;
+@@ -668,6 +669,9 @@
+ extern int sec_pd_get_apdo_max_power(unsigned int *pdo_pos, unsigned int *taMaxVol, unsigned int *taMaxCur, unsigned int *taMaxPwr);
+ #endif
+ 
++extern bool sec_bat_charge_max_mode_active(struct sec_battery_info *battery);
++extern int sec_bat_effective_charge_siop(struct sec_battery_info *battery);
++
+ extern int adc_read(struct sec_battery_info *battery, int channel);
+ extern void adc_init(struct platform_device *pdev, struct sec_battery_info *battery);
+ extern void adc_exit(struct sec_battery_info *battery);
+diff --git a/drivers/battery_v2/include/sec_battery_sysfs.h b/drivers/battery_v2/include/sec_battery_sysfs.h
+--- a/drivers/battery_v2/include/sec_battery_sysfs.h
++++ b/drivers/battery_v2/include/sec_battery_sysfs.h
+@@ -72,6 +72,7 @@
+ 	BATT_VF_ADC,
+ 	BATT_SLATE_MODE,
+ 	CHARGING_ENABLED,
++	CHARGE_MAX_MODE,
+ 
+ 	BATT_LP_CHARGING,
+ 	SIOP_ACTIVATED,
+diff --git a/drivers/battery_v2/sec_battery.c b/drivers/battery_v2/sec_battery.c
+--- a/drivers/battery_v2/sec_battery.c
++++ b/drivers/battery_v2/sec_battery.c
+@@ -28,6 +28,29 @@
+ 
+ bool sleep_mode = false;
+ bool batt_boot_complete = false;
++
++/* Adapted from the archived Benly ChargeMax v3 policy (off by default).
++ * Preserve raw SIOP, including an explicit zero request. No temperature,
++ * current, swelling, charger-IC, USB, health or safety-timer limits are raised.
++ * This switch needs physical charging validation before automatic enablement.
++ */
++bool sec_bat_charge_max_mode_active(struct sec_battery_info *battery)
++{
++	return READ_ONCE(battery->charge_max_mode) && battery->charging_enabled &&
++		!battery->store_mode && is_wired_type(battery->cable_type) &&
++		READ_ONCE(battery->siop_level) > 0;
++}
++
++int sec_bat_effective_charge_siop(struct sec_battery_info *battery)
++{
++	int siop_level = READ_ONCE(battery->siop_level);
++
++	/* Do not promote an observed userspace zero request to 100. */
++	if (siop_level > 0 && siop_level < 100 &&
++		sec_bat_charge_max_mode_active(battery))
++		return 100;
++	return siop_level;
++}
+ 
+ static enum power_supply_property sec_battery_props[] = {
+ 	POWER_SUPPLY_PROP_STATUS,
+@@ -392,15 +415,15 @@
+ __visible_for_testing void sec_bat_get_charging_current_by_siop(struct sec_battery_info *battery,
+ 		int *input_current, int *charging_current) {
+ 
+-	if (battery->siop_level < 100  &&
+-		!((battery->siop_level == 80) && is_wired_type(battery->cable_type))) {
++	if (sec_bat_effective_charge_siop(battery) < 100  &&
++		!((sec_bat_effective_charge_siop(battery) == 80) && is_wired_type(battery->cable_type))) {
+ 		int max_charging_current;
+ 
+ 		if (is_wireless_type(battery->cable_type)) {
+ 			max_charging_current = 1000; /* 1 step(70) */
+-			if (battery->siop_level == 0) { /* 3 step(0) */
++			if (sec_bat_effective_charge_siop(battery) == 0) { /* 3 step(0) */
+ 				max_charging_current = 0;
+-			} else if (battery->siop_level <= 10) { /* 2 step(10) */
++			} else if (sec_bat_effective_charge_siop(battery) <= 10) { /* 2 step(10) */
+ 				max_charging_current = 500;
+ 			}
+ 		}
+@@ -413,7 +436,7 @@
+ 			max_charging_current = 1800; /* 1 step(70) */
+ 		}
+ 
+-		if (battery->siop_level == 0)
++		if (sec_bat_effective_charge_siop(battery) == 0)
+ 			max_charging_current = 100;
+ 
+ 		/* do forced set charging current */
+@@ -438,10 +461,10 @@
+ 				if (*input_current > battery->pdata->siop_hv_input_limit_current)
+ 					*input_current = battery->pdata->siop_hv_input_limit_current;
+ 				/* 2 step(0) for hv_wire_type */
+-				if (battery->siop_level == 0 &&
++				if (sec_bat_effective_charge_siop(battery) == 0 &&
+ 					*input_current > battery->pdata->siop_hv_input_limit_current_2nd)
+ 					*input_current = battery->pdata->siop_hv_input_limit_current_2nd;
+-				else if (battery->siop_level == 20 && battery->pdata->input_current_by_siop_20 > 0)
++				else if (sec_bat_effective_charge_siop(battery) == 20 && battery->pdata->input_current_by_siop_20 > 0)
+ 					*input_current = battery->pdata->input_current_by_siop_20;
+ 			}
+ #if defined(CONFIG_CCIC_NOTIFIER)
+@@ -449,7 +472,7 @@
+ 			if (*input_current > (60000 / battery->input_voltage))
+ 				*input_current = 60000 / battery->input_voltage;
+ 			/* 2 step(0) for PD type */
+-			if (battery->siop_level == 0 &&
++			if (sec_bat_effective_charge_siop(battery) == 0 &&
+ 				*input_current > battery->pdata->siop_hv_input_limit_current_2nd)
+ 				*input_current = battery->pdata->siop_hv_input_limit_current_2nd;
+ #endif
+@@ -547,7 +570,7 @@
+ 	}
+ #endif
+ 
+-	if (battery->siop_level >= 100 && !battery->lcd_status &&
++	if (sec_bat_effective_charge_siop(battery) >= 100 && !battery->lcd_status &&
+ 		is_not_wireless_type(battery->cable_type)) {
+ 		if ((!battery->mix_limit &&
+ 				(battery->temperature > battery->pdata->mix_high_temp) && (chg_temp > high_chg_temp)) ||
+@@ -1032,7 +1055,7 @@
+ 	int lrp_step = LRP_NONE;
+ 
+ 	if (battery->store_mode || !battery->charging_enabled ||
+-		((battery->siop_level == 80) && is_wired_type(battery->cable_type))) {
++		((sec_bat_effective_charge_siop(battery) == 80) && is_wired_type(battery->cable_type))) {
+ 		pr_info("%s : store_mode(%d) charging_enabled(%d) siop(%d) ct(%d)\n",
+ 			__func__, battery->store_mode, battery->charging_enabled, battery->siop_level, battery->cable_type);
+ 		return false;
+@@ -1055,7 +1078,7 @@
+ 			target_vbus = SEC_INPUT_VOLTAGE_0V;
+ 		else if (battery->vbus_chg_by_full)
+ 			target_vbus = SEC_INPUT_VOLTAGE_5V;
+-		else if (battery->siop_level >= 100 && lrp_step == LRP_NONE) {
++		else if (sec_bat_effective_charge_siop(battery) >= 100 && lrp_step == LRP_NONE) {
+ 			if (is_hv_wire_12v_type(battery->cable_type))
+ 				target_vbus = SEC_INPUT_VOLTAGE_12V;
+ 			else
+@@ -1124,7 +1147,7 @@
+ 
+ 	pt = sec_bat_check_lpm_power(lpcharge, power_type);
+ 
+-	if (battery->siop_level >= 100) {
++	if (sec_bat_effective_charge_siop(battery) >= 100) {
+ 		if (!battery->chg_limit && is_apdo &&
+ 			((battery->dchg_temp >= battery->pdata->dchg_high_temp[pt]) ||
+ 			(battery->temperature >= battery->pdata->dchg_high_batt_temp[pt]))) {
+@@ -1159,7 +1182,7 @@
+ 		return;
+ 
+ #if defined(CONFIG_SUPPORT_HV_CTRL)
+-	if (battery->siop_level >= 100) {
++	if (sec_bat_effective_charge_siop(battery) >= 100) {
+ 		if (!battery->chg_limit && is_hv_wire_type(battery->cable_type) && (battery->chg_temp >= battery->pdata->chg_high_temp)) {
+ 			*input_current = battery->pdata->chg_input_limit_current;
+ 			*charging_current = battery->pdata->chg_charging_limit_current;
+@@ -1218,7 +1241,7 @@
+ 		return false;
+ 
+ 	if (battery->store_mode || !battery->charging_enabled ||
+-		((battery->siop_level == 80) && is_wired_type(battery->cable_type))) {
++		((sec_bat_effective_charge_siop(battery) == 80) && is_wired_type(battery->cable_type))) {
+ 		pr_info("%s : store_mode(%d) charging_enabled(%d) siop(%d) ct(%d)\n",
+ 			__func__, battery->store_mode, battery->charging_enabled, battery->siop_level, battery->cable_type);
+ 		return false;
+@@ -1234,7 +1257,7 @@
+ 		lrp_step = sec_bat_get_lrp_step(battery);
+ 		pr_info("%s: lrp_step: %d siop(%d)\n", __func__, lrp_step, battery->siop_level);
+ 
+-		if (battery->siop_level >= 100 && lrp_step == LRP_NONE) {
++		if (sec_bat_effective_charge_siop(battery) >= 100 && lrp_step == LRP_NONE) {
+ 			/* select PDO greater than 5V */
+ #if defined(CONFIG_PDIC_PD30)
+ 			/* APDO entries follow the fixed PDOs; select_pdo cannot request them. */
+@@ -1292,7 +1315,7 @@
+ 	if (battery->pdata->chg_temp_check_type == SEC_BATTERY_TEMP_CHECK_NONE)
+ 		return;
+ 
+-	if (battery->pdic_ps_rdy && battery->siop_level >= 100 && !battery->lcd_status) {
++	if (battery->pdic_ps_rdy && sec_bat_effective_charge_siop(battery) >= 100 && !battery->lcd_status) {
+ 		if ((!battery->chg_limit && (battery->chg_temp >= battery->pdata->chg_high_temp)) ||
+ 			(battery->chg_limit && (battery->chg_temp >= battery->pdata->chg_high_temp_recovery))) {
+ 			*input_current =
+@@ -1935,7 +1958,7 @@
+ 
+ 	switch (status) {
+ 	case POWER_SUPPLY_STATUS_CHARGING:
+-		if (battery->siop_level < 100 || battery->lcd_status || battery->wc_tx_enable)
++		if (sec_bat_effective_charge_siop(battery) < 100 || battery->lcd_status || battery->wc_tx_enable)
+ 			battery->stop_timer = true;
+ 		break;
+ 	case POWER_SUPPLY_STATUS_NOT_CHARGING:
+@@ -8909,6 +8932,7 @@
+ 	battery->charging_next_time = 0;
+ 	battery->charging_fullcharged_time = 0;
+ 	battery->siop_level = 100;
++	battery->charge_max_mode = false;
+ 	battery->wc_enable = 1;
+ 	battery->wc_enable_cnt = 0;
+ 	battery->wc_enable_cnt_value = 3;
+diff --git a/drivers/battery_v2/sec_battery_sysfs.c b/drivers/battery_v2/sec_battery_sysfs.c
+--- a/drivers/battery_v2/sec_battery_sysfs.c
++++ b/drivers/battery_v2/sec_battery_sysfs.c
+@@ -52,6 +52,7 @@
+ 	SEC_BATTERY_ATTR(batt_vf_adc),
+ 	SEC_BATTERY_ATTR(batt_slate_mode),
+ 	SEC_BATTERY_ATTR(charging_enabled),
++	SEC_BATTERY_ATTR(charge_max_mode),
+ 
+ 	SEC_BATTERY_ATTR(batt_lp_charging),
+ 	SEC_BATTERY_ATTR(siop_activated),
+@@ -500,6 +501,11 @@
+ 			battery->charging_enabled);
+ 		break;
+ 
++	case CHARGE_MAX_MODE:
++		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n",
++			READ_ONCE(battery->charge_max_mode) ? 1 : 0);
++		break;
++
+ 	case BATT_LP_CHARGING:
+ 		if (lpcharge) {
+ 			i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n", lpcharge ? 1 : 0);
+@@ -1894,6 +1900,23 @@
+ 						&battery->monitor_work, 0);
+ 			ret = count;
+ 		}
++		break;
++	case CHARGE_MAX_MODE:
++		ret = kstrtoint(buf, 10, &x);
++		if (ret)
++			break;
++		if (x != 0 && x != 1) {
++			ret = -EINVAL;
++			break;
++		}
++		if (READ_ONCE(battery->charge_max_mode) != !!x) {
++			WRITE_ONCE(battery->charge_max_mode, !!x);
++			dev_info(battery->dev, "%s: ChargeMax mode=%d raw_siop=%d\n",
++				__func__, x, battery->siop_level);
++			wake_lock(&battery->siop_level_wake_lock);
++			queue_delayed_work(battery->monitor_wqueue, &battery->siop_level_work, 0);
++		}
++		ret = count;
+ 		break;
+ 	case BATT_LP_CHARGING:
+ 		break;
+diff --git a/drivers/battery_v2/sec_step_charging.c b/drivers/battery_v2/sec_step_charging.c
+--- a/drivers/battery_v2/sec_step_charging.c
++++ b/drivers/battery_v2/sec_step_charging.c
+@@ -118,7 +118,7 @@
+ 		value = battery->voltage_avg;
+ 	} else if (battery->step_charging_type & STEP_CHARGING_CONDITION_SOC) {
+ 		value = battery->capacity;
+-		if (battery->siop_level < 100 || battery->lcd_status) {
++		if (sec_bat_effective_charge_siop(battery) < 100 || battery->lcd_status) {
+ 			step_condition = battery->pdata->step_charging_condition[battery->pdata->age_step][i] + 15;
+ 			curr_cnt = 0;
+ 		}
+@@ -132,7 +132,7 @@
+ 		}
+ 		i++;
+ 		if ((battery->step_charging_type & STEP_CHARGING_CONDITION_SOC) &&
+-			(battery->siop_level < 100 || battery->lcd_status))
++			(sec_bat_effective_charge_siop(battery) < 100 || battery->lcd_status))
+ 			step_condition = battery->pdata->step_charging_condition[battery->pdata->age_step][i] + 15;
+ 		else
+ 			step_condition = battery->pdata->step_charging_condition[battery->pdata->age_step][i];
+@@ -143,7 +143,7 @@
+ 	if (i != battery->step_charging_status) {
+ 		/* this is only for no consuming current */
+ 		if ((battery->step_charging_type & STEP_CHARGING_CONDITION_CURRENT_NOW) &&
+-			(battery->siop_level >= 100 && !battery->lcd_status) &&
++			(sec_bat_effective_charge_siop(battery) >= 100 && !battery->lcd_status) &&
+ 			battery->step_charging_status >= 0) {
+ 			int condition_curr;
+ 			condition_curr = max(battery->current_avg, battery->current_now);
+@@ -249,7 +249,7 @@
+ 		while(step_soc < battery->dc_step_chg_step - 1) {
+ 			soc_condition = battery->pdata->dc_step_chg_cond_soc[battery->pdata->age_step][step_soc];
+ 			if (battery->step_charging_status >= 0 &&
+-				(battery->siop_level < 100 || battery->lcd_status)) {
++				(sec_bat_effective_charge_siop(battery) < 100 || battery->lcd_status)) {
+ 				soc_condition += DIRECT_CHARGING_FORCE_SOC_MARGIN;
+ 				force_change_step = true;
+ 			}
+@@ -309,7 +309,7 @@
+ 			pr_info("%s : dc no charging status = %d \n", __func__, val.intval);
+ 			battery->dc_step_chg_iin_cnt = 0;
+ 			return false;
+-		} else if (battery->siop_level >= 100 && !battery->lcd_status) {
++		} else if (sec_bat_effective_charge_siop(battery) >= 100 && !battery->lcd_status) {
+ 			val.intval = SEC_BATTERY_IIN_MA;
+ 			psy_do_property(battery->pdata->charger_name, get,
+ 					POWER_SUPPLY_EXT_PROP_MEASURE_INPUT, val);
+@@ -347,7 +347,7 @@
+ 		if ((battery->dc_step_chg_type & STEP_CHARGING_CONDITION_INPUT_CURRENT) &&
+ 			(battery->step_charging_status >= 0)) {
+ 			if (battery->dc_step_chg_iin_cnt < battery->pdata->dc_step_chg_iin_check_cnt &&
+-				(battery->siop_level >= 100 && !battery->lcd_status)) {
++				(sec_bat_effective_charge_siop(battery) >= 100 && !battery->lcd_status)) {
+ 				pr_info("%s : keep step(%d), curr_cnt(%d/%d)\n",
+ 					__func__, battery->step_charging_status,
+ 					battery->dc_step_chg_iin_cnt, battery->pdata->dc_step_chg_iin_check_cnt);

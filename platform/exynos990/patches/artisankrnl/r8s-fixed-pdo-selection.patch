@@ -1,0 +1,21 @@
+Subject: [PATCH] r8s: keep fixed-PD selection out of the APDO range
+
+Match the existing PD3.0 fixed-PDO branches in the same driver. Preserve
+legacy PD selection, bounds checks, negotiated current and thermal policy.
+
+diff --git a/drivers/battery_v2/sec_battery.c b/drivers/battery_v2/sec_battery.c
+--- a/drivers/battery_v2/sec_battery.c
++++ b/drivers/battery_v2/sec_battery.c
+@@ -1236,7 +1236,12 @@
+ 
+ 		if (battery->siop_level >= 100 && lrp_step == LRP_NONE) {
+ 			/* select PDO greater than 5V */
++#if defined(CONFIG_PDIC_PD30)
++			/* APDO entries follow the fixed PDOs; select_pdo cannot request them. */
++			target_pd_index = battery->pd_list.num_fpdo - 1;
++#else
+ 			target_pd_index = battery->pd_list.max_pd_count - 1;
++#endif
+ 		} else {
+ 			/* select 5V PDO */
+ 			target_pd_index = 0;
