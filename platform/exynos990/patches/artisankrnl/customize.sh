@@ -111,6 +111,9 @@ REPLACE_KERNEL_BINARIES()
 
     if [[ "$TARGET_CODENAME" == "r8s" ]]; then
         APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
+            "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-dt-table-revisions.patch" \
+            "r8s stock DT table board selectors" || return 1
+        APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
             "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-panel-96hz.patch" \
             "r8s EA8079 96-Hz display mode" || return 1
     fi
@@ -118,6 +121,15 @@ REPLACE_KERNEL_BINARIES()
     # 5. Execute Build
     LOG "- Starting kernel build process."
     BUILD_KERNEL || { ABORT "Kernel build failed for $TARGET_CODENAME"; return 1; }
+
+    if [[ "$TARGET_CODENAME" == "r8s" ]]; then
+        python3 "$SRC_DIR/scripts/internal/check_r8s_boot_tables.py" \
+            "$KERNEL_TMP_DIR/build/out/r8s/boot.img" \
+            "$KERNEL_TMP_DIR/build/out/r8s/dtbo.img" || {
+                ABORT "r8s kernel DT table validation failed"
+                return 1
+            }
+    fi
 
     # 6. Artifact Management
     [[ ! -d "$WORK_DIR/kernel" ]] && mkdir -p -- "$WORK_DIR/kernel"
