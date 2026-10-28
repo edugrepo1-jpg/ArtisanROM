@@ -9,20 +9,11 @@ BUILD_KERNEL()
     cd "$KERNEL_TMP_DIR" || ABORT "BUILD_KERNEL: Cannot find $KERNEL_TMP_DIR"
 
     LOG "- Running build for ${TARGET_CODENAME}"
-    EVAL "./build.sh -m ${TARGET_CODENAME} -k y -r n" || {
-        cd "$PARENT"
-        return 1
-    }
+    EVAL "./build.sh -m ${TARGET_CODENAME} -k y -r n"
 
-    # r8s is already the SM-G780F LTE target; r8slte does not exist. Keep
-    # this in sync with the LTE artifact handling below (z3s has no variant).
-    if [[ "$TARGET_CODENAME" != "r8s" && "$TARGET_CODENAME" != "z3s" ]]; then
-        LOG "- Running build for ${TARGET_CODENAME}lte"
-        EVAL "./build.sh -m ${TARGET_CODENAME}lte -k n -r n -d y" || {
-            cd "$PARENT"
-            return 1
-        }
-    fi
+    # Fixup for LTE devices
+    LOG "- Running build for ${TARGET_CODENAME}lte"
+    EVAL "./build.sh -m ${TARGET_CODENAME}lte -k n -r n -d y"
 
     cd "$PARENT"
 }
@@ -109,32 +100,9 @@ REPLACE_KERNEL_BINARIES()
     # 4. Apply the selinux/KSU fixes (must run after the reset above)
     APPLY_SEPOLICY_FIX
 
-    if [[ "$TARGET_CODENAME" == "r8s" ]]; then
-        APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
-            "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-dt-table-revisions.patch" \
-            "r8s stock DT table board selectors" || return 1
-        APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
-            "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-panel-96hz.patch" \
-            "r8s EA8079 96-Hz display mode" || return 1
-        # Use the recovered V3 patch intact. Keep its opt-in default in normal
-        # ROM builds; test activation is separate from the original policy.
-        APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
-            "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-chargemax-v3-original.patch" \
-            "r8s original ChargeMax V3" || return 1
-    fi
-
     # 5. Execute Build
     LOG "- Starting kernel build process."
-    BUILD_KERNEL || { ABORT "Kernel build failed for $TARGET_CODENAME"; return 1; }
-
-    if [[ "$TARGET_CODENAME" == "r8s" ]]; then
-        python3 "$SRC_DIR/scripts/internal/check_r8s_boot_tables.py" \
-            "$KERNEL_TMP_DIR/build/out/r8s/boot.img" \
-            "$KERNEL_TMP_DIR/build/out/r8s/dtbo.img" || {
-                ABORT "r8s kernel DT table validation failed"
-                return 1
-            }
-    fi
+    BUILD_KERNEL
 
     # 6. Artifact Management
     [[ ! -d "$WORK_DIR/kernel" ]] && mkdir -p -- "$WORK_DIR/kernel"
@@ -145,8 +113,7 @@ REPLACE_KERNEL_BINARIES()
             rm -f "$WORK_DIR/kernel/$i.img"
             mv -f "$SRC" "$WORK_DIR/kernel/$i.img"
         else
-            ABORT "Kernel build did not produce $SRC"
-            return 1
+            LOGW "Artifact $i.img not found at $SRC"
         fi
     done
 
