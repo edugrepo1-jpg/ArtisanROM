@@ -11,4 +11,9 @@ if [[ "$TARGET_CODENAME" == "r8s" && "$SOURCE_PLATFORM_SDK_VERSION" -ge 36 ]]; t
     fi
     APPLY_PATCH "system" "system/priv-app/SamsungCamera/SamsungCamera.apk" \
         "$MODPATH/r8s-legacy-camera.patch" || return 1
+
+    # Match the on-device fix: the camera's native loader must also find the
+    # target detector inside its own APK namespace, not only /system/lib64.
+    EVAL "mkdir -p \"$APKTOOL_DIR/system/priv-app/SamsungCamera/SamsungCamera.apk/lib/arm64-v8a\"" || return 1
+    EVAL "cp -a \"$WORK_DIR/system/system/lib64/libFoodDetector.camera.samsung.so\" \"$APKTOOL_DIR/system/priv-app/SamsungCamera/SamsungCamera.apk/lib/arm64-v8a/\"" || return 1
 fi
