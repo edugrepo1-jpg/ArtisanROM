@@ -8,6 +8,8 @@ on:
     paths:
       - '.github/workflows/r8s-chargemax-kernel.yml'
       - 'scripts/internal/build_r8s_chargemax_kernel.sh'
+      - 'tests/test_r8s_charging_policy.py'
+      - 'platform/exynos990/patches/artisankrnl/customize.sh'
 
 permissions:
   contents: read
