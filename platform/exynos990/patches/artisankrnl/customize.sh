@@ -116,11 +116,20 @@ REPLACE_KERNEL_BINARIES()
         APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
             "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-panel-96hz.patch" \
             "r8s EA8079 96-Hz display mode" || return 1
-        # Use the recovered V3 patch intact. Keep its opt-in default in normal
-        # ROM builds; test activation is separate from the original policy.
+        # Preserve the recovered ChargeMax V3 exactly as provided.
         APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
             "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-chargemax-v3-original.patch" \
             "r8s original ChargeMax V3" || return 1
+        # Apply requested r8s-only overlays AFTER V3; never modify V3 itself.
+        APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
+            "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-chargemax-v3-default-on.patch" \
+            "r8s ChargeMax V3 enabled at boot" || return 1
+        APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
+            "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-charging-thermal-thresholds-requested.patch" \
+            "r8s requested thermal thresholds" || return 1
+        APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
+            "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-charging-direct-current-requested.patch" \
+            "r8s requested direct charging current" || return 1
     fi
 
     # 5. Execute Build
