@@ -122,19 +122,10 @@ REPLACE_KERNEL_BINARIES()
     # 4. Apply the selinux/KSU fixes (must run after the reset above)
     APPLY_SEPOLICY_FIX
 
-    if [[ "$TARGET_CODENAME" == "r8s" ]]; then
-        APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
-            "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-dt-table-revisions.patch" \
-            "r8s stock DT table board selectors" || return 1
-        APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
-            "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-panel-96hz.patch" \
-            "r8s EA8079 96-Hz display mode" || return 1
-        # Use the recovered V3 patch intact. Keep its opt-in default in normal
-        # ROM builds; test activation is separate from the original policy.
-        APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
-            "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-chargemax-v3-original.patch" \
-            "r8s original ChargeMax V3" || return 1
-    fi
+    # The pinned r8s kernel fork already contains the upstream-merged DT/96-Hz
+    # and original ChargeMax V3 changes, plus the separate charging commits.
+    # Do NOT reapply ROM-local kernel patches: the post-V3 boot default differs
+    # from the upstream V3 patch context and reverse-apply would fail.
 
     # 5. Execute Build
     LOG "- Starting kernel build process."
