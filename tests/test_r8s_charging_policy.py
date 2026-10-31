@@ -82,7 +82,9 @@ class ChargingPatchTests(unittest.TestCase):
 
     def test_only_r8s_selects_the_patches_after_kernel_sync(self):
         source = (PATCH_DIR / 'customize.sh').read_text()
-        start = source.index('    if [[ "$TARGET_CODENAME" == "r8s" ]]; then')
+        # The source selector is intentionally earlier; inspect only the r8s patch block.
+        start = source.index('    if [[ "$TARGET_CODENAME" == "r8s" ]]; then',
+                             source.index('    APPLY_SEPOLICY_FIX\n'))
         end = source.index('\n    fi', start) + len('\n    fi')
         branch = source[start:end]
         self.assertLess(source.index('git reset --hard FETCH_HEAD'), start)
