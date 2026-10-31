@@ -80,22 +80,23 @@ class ChargingPatchTests(unittest.TestCase):
         self.assertNotRegex(changed, r'->(?:siop_level|chg_limit|mix_limit)\s*=\s*(?:100|false|0)')
         self.assertNotIn('swelling_high_block =', changed)
 
-    def test_only_r8s_selects_the_patches_after_kernel_sync(self):
+    def test_r8s_uses_pinned_kernel_without_reapplying_rom_patches(self):
         source = (PATCH_DIR / 'customize.sh').read_text()
-        start = source.index('    if [[ "$TARGET_CODENAME" == "r8s" ]]; then')
-        end = source.index('\n    fi', start) + len('\n    fi')
-        branch = source[start:end]
-        self.assertLess(source.index('git reset --hard FETCH_HEAD'), start)
-        self.assertLess(end, source.index('    BUILD_KERNEL ||'))
-        shell = os.environ.get('BASH_TEST_EXECUTABLE', 'bash')
-        for target in ('r8s', 'y2s', 'p3s'):
-            env = dict(os.environ, TARGET_CODENAME=target, SRC_DIR='/source', KERNEL_TMP_DIR='/kernel')
-            result = subprocess.run([shell, '-c', 'set -euo pipefail\n'
-                                     'APPLY_PATCH_ONCE() { printf "%s\\n" "$2"; }\n' + branch],
-                                    env=env, capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            for patch in PATCHES:
-                self.assertEqual(patch in result.stdout, target == 'r8s')
+        # r8s switches kernel sources before syncing, but pins the exact commit
+        # after fetch. Kernel changes must not be re-applied by ROM-side patches.
+        self.assertIn('R8S_CHARGEMAX_KERNEL_BRANCH="r8s-chargemax-current-thermal-20261031"', source)
+        self.assertIn('R8S_CHARGEMAX_KERNEL_COMMIT="16df24ea7b48eb426fce2ff6b751585cc81a19a4"', source)
+        self.assertIn('git checkout --detach "$R8S_CHARGEMAX_KERNEL_COMMIT"', source)
+        self.assertLess(source.index('git reset --hard FETCH_HEAD'),
+                        source.index('git checkout --detach "$R8S_CHARGEMAX_KERNEL_COMMIT"'))
+        start = source.index('    APPLY_SEPOLICY_FIX\n')
+        end = source.index('    BUILD_KERNEL ||', start)
+        self.assertLess(start, end)
+        stage = source[start:end]
+        self.assertNotIn('APPLY_PATCH_ONCE "$KERNEL_TMP_DIR"', stage)
+        self.assertNotIn('r8s-charging-thermal-thresholds-requested.patch', source)
+        self.assertNotIn('r8s-charging-direct-current-requested.patch', source)
+        self.assertNotIn('r8s-chargemax-v3-default-on.patch', source)
 
 
 @unittest.skipUnless(os.environ.get('R8S_CHARGING_KERNEL_DIR'),

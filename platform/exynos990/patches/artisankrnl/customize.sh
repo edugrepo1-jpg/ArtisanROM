@@ -1,5 +1,8 @@
 # [
 EXTREMEKRNL_REPO="https://github.com/Android-Artisan/android_kernel_samsung_exynos990"
+R8S_CHARGEMAX_KERNEL_REPO="https://github.com/edugrepo1-jpg/android_kernel_samsung_exynos990"
+R8S_CHARGEMAX_KERNEL_BRANCH="r8s-chargemax-current-thermal-20261031"
+R8S_CHARGEMAX_KERNEL_COMMIT="16df24ea7b48eb426fce2ff6b751585cc81a19a4"
 
 BUILD_KERNEL()
 {
@@ -86,13 +89,18 @@ REPLACE_KERNEL_BINARIES()
     # 1. Define the directory name based on your requirement
     # Using 'out' as the parent folder
     KERNEL_TMP_DIR="out/kernel_tmp-${TARGET_PLATFORM}"
+    local KERNEL_REPO="$EXTREMEKRNL_REPO" KERNEL_BRANCH="bpf111"
+    if [[ "$TARGET_CODENAME" == "r8s" ]]; then
+        KERNEL_REPO="$R8S_CHARGEMAX_KERNEL_REPO"
+        KERNEL_BRANCH="$R8S_CHARGEMAX_KERNEL_BRANCH"
+    fi
 
     # 2. Check if the directory is missing
     if [[ ! -d "$KERNEL_TMP_DIR" ]]; then
         LOG "- Kernel directory missing. Cloning into $KERNEL_TMP_DIR..."
         # Ensure 'out' exists before cloning
         mkdir -p -- "out"
-        EVAL "git clone --branch bpf111 --single-branch --recurse-submodules \"$EXTREMEKRNL_REPO\" \"$KERNEL_TMP_DIR\"" || ABORT "Clone failed"
+        EVAL "git clone --branch $KERNEL_BRANCH --single-branch --recurse-submodules \"$KERNEL_REPO\" \"$KERNEL_TMP_DIR\"" || ABORT "Clone failed"
     fi
 
     # 3. Repository Sync
@@ -101,6 +109,11 @@ REPLACE_KERNEL_BINARIES()
         LOG "- Syncing source code..."
         git fetch --all
         git reset --hard FETCH_HEAD
+        if [[ "$TARGET_CODENAME" == "r8s" ]]; then
+            [[ "$(git remote get-url origin)" == "$R8S_CHARGEMAX_KERNEL_REPO" ]] || ABORT "Unexpected r8s kernel origin"
+            git checkout --detach "$R8S_CHARGEMAX_KERNEL_COMMIT" || ABORT "Pinned kernel revision missing"
+            [[ "$(git rev-parse HEAD)" == "$R8S_CHARGEMAX_KERNEL_COMMIT" ]] || ABORT "Unexpected r8s kernel commit"
+        fi
         cd - > /dev/null || exit
     else
         ABORT "Directory exists but is not a git repo: $KERNEL_TMP_DIR"
@@ -109,19 +122,10 @@ REPLACE_KERNEL_BINARIES()
     # 4. Apply the selinux/KSU fixes (must run after the reset above)
     APPLY_SEPOLICY_FIX
 
-    if [[ "$TARGET_CODENAME" == "r8s" ]]; then
-        APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
-            "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-dt-table-revisions.patch" \
-            "r8s stock DT table board selectors" || return 1
-        APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
-            "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-panel-96hz.patch" \
-            "r8s EA8079 96-Hz display mode" || return 1
-        # Use the recovered V3 patch intact. Keep its opt-in default in normal
-        # ROM builds; test activation is separate from the original policy.
-        APPLY_PATCH_ONCE "$KERNEL_TMP_DIR" \
-            "$SRC_DIR/platform/exynos990/patches/artisankrnl/r8s-chargemax-v3-original.patch" \
-            "r8s original ChargeMax V3" || return 1
-    fi
+    # The pinned r8s kernel fork already contains the upstream-merged DT/96-Hz
+    # and original ChargeMax V3 changes, plus the separate charging commits.
+    # Do NOT reapply ROM-local kernel patches: the post-V3 boot default differs
+    # from the upstream V3 patch context and reverse-apply would fail.
 
     # 5. Execute Build
     LOG "- Starting kernel build process."

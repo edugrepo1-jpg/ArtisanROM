@@ -2,6 +2,11 @@ name: Build r8s port
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - r8s-chargemax-thermal-current-20261031
+    paths:
+      - '.github/workflows/build.yml'
 
 permissions:
   contents: read
