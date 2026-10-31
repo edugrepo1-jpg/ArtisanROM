@@ -27,24 +27,46 @@ git -C "$KERNEL_DIR" submodule update --init --recursive
 git -C "$KERNEL_DIR/KernelSU-Next" apply --check "$PATCH_DIR/kernelsu-sepolicy-fix.patch"
 git -C "$KERNEL_DIR/KernelSU-Next" apply "$PATCH_DIR/kernelsu-sepolicy-fix.patch"
 echo "3e4d20c8b0de6f5d20b701fb8be3fb3cdd409da7dcb01df985598ececd3afaac  $PATCH_DIR/r8s-chargemax-v3-original.patch" | sha256sum --check
+# V3 remains byte-for-byte intact. The user-requested changes are separate
+# patches, all applied only to the r8s build and in the required order.
 for patch in r8s-dt-table-revisions.patch r8s-panel-96hz.patch \
-             r8s-chargemax-v3-original.patch; do
+             r8s-chargemax-v3-original.patch \
+             r8s-chargemax-v3-default-on.patch \
+             r8s-charging-thermal-thresholds-requested.patch \
+             r8s-charging-direct-current-requested.patch; do
     git -C "$KERNEL_DIR" apply --check "$PATCH_DIR/$patch"
     git -C "$KERNEL_DIR" apply "$PATCH_DIR/$patch"
 done
 
-# Explicitly requested test variant: ChargeMax enabled from initialization.
-# The normal ROM patch stays opt-in/off; this override is confined to this
-# manually dispatched kernel test build and recorded in its applied diff.
-python3 - "$KERNEL_DIR/drivers/battery_v2/sec_battery.c" <<'PY'
+# Verify the compiled sources contain precisely the requested r8s values.
+python3 - "$KERNEL_DIR" <<'PY'
 from pathlib import Path
 import sys
-path = Path(sys.argv[1])
-source = path.read_text()
-old = '\tbattery->charge_max_mode = false;'
-if source.count(old) != 1:
-    raise SystemExit('Unexpected ChargeMax initialization; refusing test override')
-path.write_text(source.replace(old, '\tbattery->charge_max_mode = true;'))
+root = Path(sys.argv[1])
+battery = (root / "drivers/battery_v2/sec_battery.c").read_text()
+dts = (root / "arch/arm64/boot/dts/samsung/battery_data_r8_common.dtsi").read_text()
+if battery.count("battery->charge_max_mode = true;") != 1:
+    raise SystemExit("ChargeMax must be enabled exactly once")
+expected = {
+    "charger,dchg_temp_high_threshold": "450",
+    "battery,chg_high_temp": "500",
+    "battery,chg_high_temp_recovery": "480",
+    "battery,dchg_high_temp": "1000 1000 560 560",
+    "battery,dchg_high_temp_recovery": "1000 1000 500 500",
+    "battery,dchg_high_batt_temp": "1000 1000 430 430",
+    "battery,dchg_high_batt_temp_recovery": "1000 1000 410 410",
+    "battery,swelling_high_temp_block": "450",
+    "battery,swelling_high_temp_recov": "430",
+    "battery,dchg_input_limit_current": "1500",
+    "battery,dchg_charging_limit_current": "3000",
+    "battery,siop_apdo_charging_limit_current": "3000",
+}
+import re
+for key, value in expected.items():
+    matches = re.findall(r"(?m)^[ \t]*"+re.escape(key)+r"\s*=\s*<([^>]+)>;", dts)
+    if len(matches) != 1 or " ".join(matches[0].split()) != value:
+        raise SystemExit(f"Unexpected DTS parameter {key}: {matches!r}")
+print("Verified ChargeMax enabled and all 12 requested DTS parameters")
 PY
 
 # Exercise the actual C charging helper, not a Python reimplementation.
@@ -84,8 +106,9 @@ manifest = {
     'ksu_commit': os.environ['KSU_COMMIT'],
     'target': 'SM-G780F/r8s', 'charge_max_default': 1,
     'original_patch_sha256': '3e4d20c8b0de6f5d20b701fb8be3fb3cdd409da7dcb01df985598ececd3afaac',
-    'purpose': 'Intact recovered ChargeMax V3; separate user-requested ON initialization for this test only.',
+    'purpose': 'Kernel-only r8s test: original ChargeMax V3 plus separate boot activation, thermal and charging-current patches.',
     'flashable': False,
+    'patches': ['r8s-chargemax-v3-original.patch', 'r8s-chargemax-v3-default-on.patch', 'r8s-charging-thermal-thresholds-requested.patch', 'r8s-charging-direct-current-requested.patch'],
     'packaging': 'Replace only the kernel in the known boot59 template; preserve its ramdisk and DTB, and retain installed DTBO.',
     'sha256': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(out.iterdir()) if p.is_file()},
 }
