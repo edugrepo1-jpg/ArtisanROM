@@ -2,6 +2,12 @@ name: Build r8s ChargeMax kernel only
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - r8s-chargemax-thermal-current-20261031
+    paths:
+      - '.github/workflows/r8s-chargemax-kernel.yml'
+      - 'scripts/internal/build_r8s_chargemax_kernel.sh'
 
 permissions:
   contents: read
@@ -37,7 +43,7 @@ jobs:
         uses: pierotofy/set-swap-space@v1.0
         with:
           swap-size-gb: 8
-      - name: Build pinned r8s kernel with ChargeMax enabled for this test
+      - name: Build pinned r8s kernel directly from kernel fork
         run: bash scripts/internal/build_r8s_chargemax_kernel.sh
       - name: Retain build diagnostics
         if: always()

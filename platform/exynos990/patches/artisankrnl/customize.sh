@@ -1,5 +1,8 @@
 # [
 EXTREMEKRNL_REPO="https://github.com/Android-Artisan/android_kernel_samsung_exynos990"
+R8S_CHARGEMAX_KERNEL_REPO="https://github.com/edugrepo1-jpg/android_kernel_samsung_exynos990"
+R8S_CHARGEMAX_KERNEL_BRANCH="r8s-chargemax-current-thermal-20261031"
+R8S_CHARGEMAX_KERNEL_COMMIT="16df24ea7b48eb426fce2ff6b751585cc81a19a4"
 
 BUILD_KERNEL()
 {
@@ -86,13 +89,18 @@ REPLACE_KERNEL_BINARIES()
     # 1. Define the directory name based on your requirement
     # Using 'out' as the parent folder
     KERNEL_TMP_DIR="out/kernel_tmp-${TARGET_PLATFORM}"
+    local KERNEL_REPO="$EXTREMEKRNL_REPO" KERNEL_BRANCH="bpf111"
+    if [[ "$TARGET_CODENAME" == "r8s" ]]; then
+        KERNEL_REPO="$R8S_CHARGEMAX_KERNEL_REPO"
+        KERNEL_BRANCH="$R8S_CHARGEMAX_KERNEL_BRANCH"
+    fi
 
     # 2. Check if the directory is missing
     if [[ ! -d "$KERNEL_TMP_DIR" ]]; then
         LOG "- Kernel directory missing. Cloning into $KERNEL_TMP_DIR..."
         # Ensure 'out' exists before cloning
         mkdir -p -- "out"
-        EVAL "git clone --branch bpf111 --single-branch --recurse-submodules \"$EXTREMEKRNL_REPO\" \"$KERNEL_TMP_DIR\"" || ABORT "Clone failed"
+        EVAL "git clone --branch $KERNEL_BRANCH --single-branch --recurse-submodules \"$KERNEL_REPO\" \"$KERNEL_TMP_DIR\"" || ABORT "Clone failed"
     fi
 
     # 3. Repository Sync
@@ -101,6 +109,11 @@ REPLACE_KERNEL_BINARIES()
         LOG "- Syncing source code..."
         git fetch --all
         git reset --hard FETCH_HEAD
+        if [[ "$TARGET_CODENAME" == "r8s" ]]; then
+            [[ "$(git remote get-url origin)" == "$R8S_CHARGEMAX_KERNEL_REPO" ]] || ABORT "Unexpected r8s kernel origin"
+            git checkout --detach "$R8S_CHARGEMAX_KERNEL_COMMIT" || ABORT "Pinned kernel revision missing"
+            [[ "$(git rev-parse HEAD)" == "$R8S_CHARGEMAX_KERNEL_COMMIT" ]] || ABORT "Unexpected r8s kernel commit"
+        fi
         cd - > /dev/null || exit
     else
         ABORT "Directory exists but is not a git repo: $KERNEL_TMP_DIR"
