@@ -1,7 +1,13 @@
 name: Build r8s port
+# 2026-11-03: Trigger an r8s-only ROM build via the existing branch push workflow.
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - r8s-chargemax-thermal-current-20261031
+    paths:
+      - '.github/workflows/build.yml'
 
 permissions:
   contents: read
@@ -43,13 +49,15 @@ jobs:
             attr bc bison brotli build-essential ccache clang cpio curl flex \
             f2fs-tools ffmpeg g++-aarch64-linux-gnu gcc-aarch64-linux-gnu git jq kmod \
             libbrotli-dev libbz2-dev libelf-dev libfuse-dev libgtest-dev \
-            liblz4-dev libpcre2-dev libprotobuf-dev libssl-dev libunwind-dev \
+            libc++1 libc++abi1 liblz4-dev libpcre2-dev libprotobuf-dev libssl-dev libunwind-dev \
             libzstd-dev lld lz4 patchelf \
             protobuf-compiler python-is-python3 python3 rsync unzip webp wget xz-utils zip
           git config --global user.name 'github-actions[bot]'
           git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
           # Upstream supports unofficial signing with its bundled AOSP keys.
           # Do not create empty official keys from absent upstream secrets.
+      - name: Verify kernel compiler host runtime before firmware downloads
+        run: python3 scripts/internal/check_kernel_host_runtime.py
       - name: Verify host F2FS support before firmware downloads
         run: bash scripts/internal/prepare_ci_filesystems.sh
       - name: Set up JDK 17

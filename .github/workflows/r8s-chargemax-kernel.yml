@@ -2,6 +2,14 @@ name: Build r8s ChargeMax kernel only
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - r8s-chargemax-thermal-current-20261031
+    paths:
+      - '.github/workflows/r8s-chargemax-kernel.yml'
+      - 'scripts/internal/build_r8s_chargemax_kernel.sh'
+      - 'tests/test_r8s_charging_policy.py'
+      - 'platform/exynos990/patches/artisankrnl/customize.sh'
 
 permissions:
   contents: read
@@ -23,6 +31,7 @@ jobs:
             /.gitattributes
             /scripts/internal/build_r8s_chargemax_kernel.sh
             /scripts/internal/check_r8s_boot_tables.py
+            /scripts/internal/check_kernel_host_runtime.py
             /tests/test_r8s_charging_policy.py
             /platform/exynos990/patches/artisankrnl/
       - name: Validate stored patch bytes before downloading the kernel
@@ -31,13 +40,15 @@ jobs:
         run: |
           sudo -n apt-get update
           sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            bc bison build-essential cpio curl flex git libelf-dev libssl-dev \
+            bc bison build-essential cpio curl flex git libc++1 libc++abi1 libelf-dev libssl-dev \
             lld python3 rsync unzip xz-utils zip
+      - name: Verify kernel compiler host runtime
+        run: python3 scripts/internal/check_kernel_host_runtime.py
       - name: Add temporary build swap
         uses: pierotofy/set-swap-space@v1.0
         with:
           swap-size-gb: 8
-      - name: Build pinned r8s kernel with ChargeMax enabled for this test
+      - name: Build pinned r8s kernel directly from kernel fork
         run: bash scripts/internal/build_r8s_chargemax_kernel.sh
       - name: Retain build diagnostics
         if: always()
