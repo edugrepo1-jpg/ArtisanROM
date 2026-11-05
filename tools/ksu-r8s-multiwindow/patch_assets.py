@@ -16,7 +16,7 @@ assets = Path(sys.argv[1]) / "assets"
 pattern = re.compile(
     r'(?m)^[ \t]*<limiter\b(?=[^>]*\bname="MultiWindow")[^>]*\/>[ \t]*(?:\r?\n)?'
 )
-for name in ("siop_r8s_exynos990.xml", "siop_default.xml"):
+for name in ("siop_r8s_exynos990.xml", "siop_default.xml", "ssrm_default.xml"):
     path = assets / name
     if not path.is_file():
         raise SystemExit(f"Required thermal policy missing: {path}")
