@@ -35,11 +35,12 @@ jobs:
             attr ccache clang ffmpeg libbrotli-dev \
             libbz2-dev libgtest-dev libprotobuf-dev \
             libunwind-dev libpcre2-dev libzstd-dev \
-            linux-modules-extra-$(uname -r) lld \
+            lld \
             protobuf-compiler webp build-essential \
             g++-aarch64-linux-gnu gcc-aarch64-linux-gnu \
             python-is-python3 python3 wget unzip zip
-          sudo modprobe erofs f2fs || true
+          sudo modprobe erofs || true
+          sudo modprobe f2fs || true
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -69,7 +70,7 @@ jobs:
       - name: Prepare build tools and firmware
         shell: bash
         run: |
-          set -euo pipefail
+          set -eo pipefail
           source ./buildenv.sh r8s
           ./scripts/build_dependencies.sh
           ./scripts/download_fw.sh
@@ -78,7 +79,7 @@ jobs:
       - name: Build original APK baseline
         shell: bash
         run: |
-          set -euo pipefail
+          set -eo pipefail
           source ./buildenv.sh r8s
           ./scripts/make_rom.sh --no-rom-zip
 
@@ -90,7 +91,7 @@ jobs:
       - name: Patch and rebuild SDHMS
         shell: bash
         run: |
-          set -euo pipefail
+          set -eo pipefail
           source ./buildenv.sh r8s
 
           REL="system/priv-app/SamsungDeviceHealthManagerService/SamsungDeviceHealthManagerService.apk"
