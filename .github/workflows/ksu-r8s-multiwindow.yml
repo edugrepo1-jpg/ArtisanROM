@@ -23,6 +23,16 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Configure Git committer identity for nested ADB patches
+        shell: bash
+        run: |
+          set -e
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          test -n "$(git config --global user.name)"
+          test -n "$(git config --global user.email)"
+          echo "Git committer identity verified."
+
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
@@ -47,6 +57,18 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+
+      - name: Set up Rust (required by external/samloader-rs)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify Cargo and Git identities before building
+        shell: bash
+        run: |
+          set -e
+          cargo --version
+          rustc --version
+          git config --global user.name
+          git config --global user.email
 
       - name: Load existing ArtisanROM signing keys
         env:
