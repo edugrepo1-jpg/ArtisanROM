@@ -8,7 +8,7 @@ test -n "$RUNNER_TEMP" || { echo "Must run inside GitHub Actions" >&2; exit 1; }
 
 echo "=== Build tools, download/extract SOURCE firmware only (no target firmware) ==="
 ./scripts/build_dependencies.sh
-./scripts/download_fw.sh --ignore-target
+./scripts/download_fw.sh --ignore-target --version "$SOURCE_FIRMWARE_VERSION"
 ./scripts/extract_fw.sh --ignore-target
 
 SOURCE_PATH="$(cut -d / -f 1 <<< "$SOURCE_FIRMWARE")_$(cut -d / -f 2 <<< "$SOURCE_FIRMWARE")"
