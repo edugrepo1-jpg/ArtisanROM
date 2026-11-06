@@ -1,190 +1,95 @@
-
-name: Build MultiWindow KSU Fix
+name: Build MultiWindow KSU Fix (APK only)
 
 on:
   push:
     branches:
-      - ksu-r8s-multiwindow-fix-20261105
+      - ksu-r8s-multiwindow-fast-20261105
     paths:
       - '.github/workflows/ksu-r8s-multiwindow.yml'
+      - 'tools/ksu-r8s-multiwindow/fast_build.sh'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# No shared concurrency group with older ROM workflow.
 jobs:
-  build:
+  apk-only:
     runs-on: ubuntu-24.04
-    timeout-minutes: 330
-
+    timeout-minutes: 270
     steps:
-      - name: Checkout
+      - name: Checkout firmware tooling and source
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Configure Git committer identity for nested ADB patches
+      - name: Configure Git for vendor adb patching
         shell: bash
         run: |
-          set -e
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           test -n "$(git config --global user.name)"
           test -n "$(git config --global user.email)"
-          echo "Git committer identity verified."
 
-      - name: Free disk space
+      - name: Free unused runner disk
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
           sudo docker image prune -af || true
+          df -h
 
-      - name: Install dependencies
+      - name: Install prerequisites
         run: |
+          set -e
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            attr ccache clang ffmpeg libbrotli-dev \
-            libbz2-dev libgtest-dev libprotobuf-dev \
-            libunwind-dev libpcre2-dev libzstd-dev \
-            lld \
-            protobuf-compiler webp build-essential \
+            attr ccache clang ffmpeg libbrotli-dev libbz2-dev \
+            libgtest-dev libprotobuf-dev libunwind-dev libpcre2-dev \
+            libzstd-dev lld protobuf-compiler webp build-essential \
             g++-aarch64-linux-gnu gcc-aarch64-linux-gnu \
             python-is-python3 python3 wget unzip zip
           sudo modprobe erofs || true
           sudo modprobe f2fs || true
 
-      - name: Setup Java
+      - name: Configure JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      - name: Set up Rust (required by external/samloader-rs)
+      - name: Configure Rust for source firmware tool
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Verify Cargo and Git identities before building
-        shell: bash
-        run: |
-          set -e
-          cargo --version
-          rustc --version
-          git config --global user.name
-          git config --global user.email
-
-      - name: Load existing ArtisanROM signing keys
+      - name: Restore ArtisanROM signing keys if configured
         env:
           PLATFORM_PK8: ${{ secrets.PLATFORM_KEY_PK8 }}
           PLATFORM_PEM: ${{ secrets.PLATFORM_KEY_PEM }}
           OTA_PK8: ${{ secrets.OTA_KEY_PK8 }}
           OTA_PEM: ${{ secrets.OTA_KEY_PEM }}
+        shell: bash
         run: |
-          if [ -n "$PLATFORM_PK8" ] && \
-             [ -n "$PLATFORM_PEM" ] && \
-             [ -n "$OTA_PK8" ] && \
-             [ -n "$OTA_PEM" ]; then
+          set -eo pipefail
+          if [ -n "$PLATFORM_PK8" ] && [ -n "$PLATFORM_PEM" ] && \
+             [ -n "$OTA_PK8" ] && [ -n "$OTA_PEM" ]; then
             printf %s "$PLATFORM_PK8" | base64 -d > security/artisanrom_platform.pk8
             printf %s "$PLATFORM_PEM" | base64 -d > security/artisanrom_platform.x509.pem
             printf %s "$OTA_PK8" | base64 -d > security/artisanrom_ota.pk8
             printf %s "$OTA_PEM" | base64 -d > security/artisanrom_ota.x509.pem
+            echo "Using repository-configured ArtisanROM signing keys."
           else
-            echo "Official keys unavailable; repository AOSP keys will be used."
+            echo "No complete ArtisanROM key set; AOSP development keys will be used."
           fi
 
-      - name: Prepare build tools and firmware
+      - name: Build only source-firmware SDHMS APK (no ROM/kernel)
         shell: bash
         run: |
           set -eo pipefail
-          source ./buildenv.sh r8s
-          ./scripts/build_dependencies.sh
-          ./scripts/download_fw.sh
-          ./scripts/extract_fw.sh
+          bash tools/ksu-r8s-multiwindow/fast_build.sh
 
-      - name: Build original APK baseline
-        shell: bash
-        run: |
-          set -eo pipefail
-          source ./buildenv.sh r8s
-          ./scripts/make_rom.sh --no-rom-zip
-
-          APK="$WORK_DIR/system/system/priv-app/SamsungDeviceHealthManagerService/SamsungDeviceHealthManagerService.apk"
-          test -s "$APK"
-          cp "$APK" "$RUNNER_TEMP/base.apk"
-          sha256sum "$RUNNER_TEMP/base.apk"
-
-      - name: Patch and rebuild SDHMS
-        shell: bash
-        run: |
-          set -eo pipefail
-          source ./buildenv.sh r8s
-
-          REL="system/priv-app/SamsungDeviceHealthManagerService/SamsungDeviceHealthManagerService.apk"
-          TREE="$APKTOOL_DIR/system/priv-app/SamsungDeviceHealthManagerService/SamsungDeviceHealthManagerService.apk"
-
-          test -d "$TREE"
-          python3 tools/ksu-r8s-multiwindow/patch_assets.py "$TREE"
-
-          ./scripts/apktool.sh build system "$REL"
-
-          cp "$WORK_DIR/system/$REL" "$RUNNER_TEMP/patched.apk"
-
-      - name: Verify modified APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          BASE="$RUNNER_TEMP/base.apk"
-          PATCHED="$RUNNER_TEMP/patched.apk"
-
-          unzip -t "$PATCHED" >/dev/null
-          jarsigner -verify "$BASE"
-          jarsigner -verify "$PATCHED"
-
-          keytool -printcert -jarfile "$BASE" > "$RUNNER_TEMP/base-cert.txt"
-          keytool -printcert -jarfile "$PATCHED" > "$RUNNER_TEMP/patched-cert.txt"
-
-          BASE_CERT="$(grep 'SHA256:' "$RUNNER_TEMP/base-cert.txt" | head -1)"
-          PATCHED_CERT="$(grep 'SHA256:' "$RUNNER_TEMP/patched-cert.txt" | head -1)"
-
-          test -n "$BASE_CERT"
-          test "$BASE_CERT" = "$PATCHED_CERT"
-
-          python3 - "$BASE" "$PATCHED" <<'PY'
-          import sys, zipfile, xml.etree.ElementTree as ET
-          base, patched = map(zipfile.ZipFile, sys.argv[1:])
-          for name in ("siop_r8s_exynos990.xml", "siop_default.xml"):
-              path = "assets/" + name
-              a = ET.fromstring(base.read(path))
-              b = ET.fromstring(patched.read(path))
-              def count(root):
-                  return sum(
-                      e.get("name") == "MultiWindow"
-                      for c in root.iter("component")
-                      for e in c.findall("limiter")
-                  )
-              assert count(a) == 1, name
-              assert count(b) == 0, name
-              assert any(
-                  s.get("name") == "MultiWindow"
-                  for s in b.iter("scenario")
-              ), name
-          print("Thermal MultiWindow policy checks passed.")
-          PY
-
-      - name: Package KernelSU module
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-
-          python3 tools/ksu-r8s-multiwindow/package_module.py \
-            "$RUNNER_TEMP/base.apk" \
-            "$RUNNER_TEMP/patched.apk" \
-            dist/ArtisanROM-r8s-MultiWindow-KSU-TEST.zip
-
-          unzip -t dist/ArtisanROM-r8s-MultiWindow-KSU-TEST.zip
-          sha256sum dist/*.zip > dist/SHA256SUMS.txt
-
-      - name: Upload ZIP
+      - name: Upload validated experimental KSU ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: ArtisanROM-MultiWindow-KSU
+          name: ArtisanROM-r8s-MultiWindow-KSU-FAST-TEST
           path: dist/
+          if-no-files-found: error
           retention-days: 14
