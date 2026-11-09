@@ -1,0 +1,73 @@
+--- a/smali_classes4/com/sec/android/app/camera/layer/keyscreen/quicksetting/QuickSettingViewAdapter$ViewHolder.smali
++++ b/smali_classes4/com/sec/android/app/camera/layer/keyscreen/quicksetting/QuickSettingViewAdapter$ViewHolder.smali
+@@ -626,6 +626,36 @@
+ 
+     iput p1, p0, Lcom/sec/android/app/camera/layer/keyscreen/quicksetting/QuickSettingViewAdapter$ViewHolder;->mImageLevel:I
+ 
++    iget-object v0, p0, Lcom/sec/android/app/camera/layer/keyscreen/quicksetting/QuickSettingViewAdapter$ViewHolder;->mItem:Li3/p;
++    iget-object v0, v0, Li3/p;->a:Lcom/sec/android/app/camera/interfaces/CommandId;
++    sget-object v1, Lcom/sec/android/app/camera/interfaces/CommandId;->FRONT_CAMERA_PICTURE_SIZE_HIGH:Lcom/sec/android/app/camera/interfaces/CommandId;
++    if-eq v0, v1, :r8s_front_high_label
++    sget-object v1, Lcom/sec/android/app/camera/interfaces/CommandId;->FRONT_CAMERA_PICTURE_SIZE_NORMAL:Lcom/sec/android/app/camera/interfaces/CommandId;
++    if-eq v0, v1, :r8s_front_normal_label
++    sget-object v1, Lcom/sec/android/app/camera/interfaces/CommandId;->FRONT_CAMERA_PICTURE_SIZE_TOGGLE_MENU:Lcom/sec/android/app/camera/interfaces/CommandId;
++    if-ne v0, v1, :r8s_original_image_level
++    const/4 v0, 0x2
++    if-eq p1, v0, :r8s_front_high_label
++    :r8s_front_normal_label
++    const-string v1, "10M"
++    goto :r8s_front_size_text
++    :r8s_front_high_label
++    const-string v1, "32M"
++    :r8s_front_size_text
++    iget-object v0, p0, Lcom/sec/android/app/camera/layer/keyscreen/quicksetting/QuickSettingViewAdapter$ViewHolder;->mButtonText:Landroid/widget/TextView;
++    invoke-virtual {v0, v1}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
++    const/4 v1, -0x1
++    invoke-virtual {v0, v1}, Landroid/widget/TextView;->setTextColor(I)V
++    const/high16 v1, 0x3f800000
++    invoke-virtual {v0, v1}, Landroid/view/View;->setAlpha(F)V
++    const/4 v1, 0x0
++    invoke-virtual {v0, v1}, Landroid/view/View;->setVisibility(I)V
++    iget-object v0, p0, Lcom/sec/android/app/camera/layer/keyscreen/quicksetting/QuickSettingViewAdapter$ViewHolder;->mButtonImage:Landroid/widget/ImageView;
++    const/4 v1, 0x4
++    invoke-virtual {v0, v1}, Landroid/view/View;->setVisibility(I)V
++    return-void
++    :r8s_original_image_level
++
+     iget-object v0, p0, Lcom/sec/android/app/camera/layer/keyscreen/quicksetting/QuickSettingViewAdapter$ViewHolder;->this$0:Lcom/sec/android/app/camera/layer/keyscreen/quicksetting/QuickSettingViewAdapter;
+ 
+     invoke-static {v0}, Lcom/sec/android/app/camera/layer/keyscreen/quicksetting/QuickSettingViewAdapter;->e(Lcom/sec/android/app/camera/layer/keyscreen/quicksetting/QuickSettingViewAdapter;)Li3/o;
+--- a/smali_classes4/com/sec/android/app/camera/layer/keyscreen/quicksetting/QuickSettingPresenter.smali
++++ b/smali_classes4/com/sec/android/app/camera/layer/keyscreen/quicksetting/QuickSettingPresenter.smali
+@@ -1480,6 +1480,9 @@
+         }
+     .end annotation
+ 
++
++    invoke-static {p1}, Lcom/sec/android/app/camera/layer/keyscreen/quicksetting/QuickSettingPresenter;->r8sWithFrontRatio(Ljava/util/List;)Ljava/util/List;
++    move-result-object p1
+     new-instance v0, Ljava/util/ArrayList;
+ 
+     invoke-interface {p1}, Ljava/util/List;->size()I
+@@ -6772,3 +6775,21 @@
+ 
+     return-void
+ .end method
++
++.method private static r8sWithFrontRatio(Ljava/util/List;)Ljava/util/List;
++    .locals 3
++    sget-object v0, Lcom/sec/android/app/camera/interfaces/CommandId;->FRONT_CAMERA_PICTURE_SIZE_TOGGLE_MENU:Lcom/sec/android/app/camera/interfaces/CommandId;
++    invoke-interface {p0, v0}, Ljava/util/List;->indexOf(Ljava/lang/Object;)I
++    move-result v1
++    if-ltz v1, :r8s_keep_main_items
++    sget-object v0, Lcom/sec/android/app/camera/interfaces/CommandId;->FRONT_CAMERA_PICTURE_RATIO_MENU:Lcom/sec/android/app/camera/interfaces/CommandId;
++    invoke-interface {p0, v0}, Ljava/util/List;->contains(Ljava/lang/Object;)Z
++    move-result v2
++    if-nez v2, :r8s_keep_main_items
++    new-instance v2, Ljava/util/ArrayList;
++    invoke-direct {v2, p0}, Ljava/util/ArrayList;-><init>(Ljava/util/Collection;)V
++    invoke-virtual {v2, v1, v0}, Ljava/util/ArrayList;->add(ILjava/lang/Object;)V
++    return-object v2
++    :r8s_keep_main_items
++    return-object p0
++.end method
