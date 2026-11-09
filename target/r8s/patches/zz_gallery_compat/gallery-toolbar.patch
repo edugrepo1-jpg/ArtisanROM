@@ -1,9 +1,9 @@
 --- a/smali_classes3/com/samsung/android/gallery/widget/bottom/BottomBar.smali
 +++ b/smali_classes3/com/samsung/android/gallery/widget/bottom/BottomBar.smali
-@@ -3764,6 +3764,14 @@
+@@ -2104,6 +2104,14 @@
+ 
  .method public show(Z)V
      .locals 2
- 
 +    # Drop a previous hide transform before reusing this floating container.
 +    invoke-direct {p0}, Lcom/samsung/android/gallery/widget/bottom/BottomBar;->getSlideView()Landroid/view/View;
 +    move-result-object v0
@@ -12,6 +12,6 @@
 +    invoke-virtual {v0, v1}, Landroid/view/View;->setAlpha(F)V
 +    invoke-virtual {p0, v1}, Landroid/view/View;->setAlpha(F)V
 +
-     .line 2
+ 
      invoke-direct {p0}, Lcom/samsung/android/gallery/widget/bottom/BottomBar;->getMenuCount()I
  
