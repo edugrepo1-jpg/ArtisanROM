@@ -1,0 +1,5 @@
+id=r8s_multiwindow_scenario
+name=r8s multi-window thermal scenario compatibility
+author=ArtisanROM contributors
+version=1
+description=Keeps the SDHMS MultiWindow scenario from withdrawing multi-window support; preserves all hardware thermal protection and other limiters.

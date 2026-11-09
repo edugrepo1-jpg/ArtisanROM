@@ -1,0 +1,20 @@
+--- a/smali_classes3/com/samsung/android/gallery/support/library/v16/Sem175ApiCompatImpl.smali
++++ b/smali_classes3/com/samsung/android/gallery/support/library/v16/Sem175ApiCompatImpl.smali
+@@ -15,7 +15,16 @@
+ 
+ # virtual methods
+ .method public getKeepStorage()Lcom/samsung/android/gallery/support/library/abstraction/KeepStorage;
+-    .locals 0
++    .locals 1
++
++    invoke-static {}, Lcom/samsung/android/security/SemPassStorageManager;->getInstance()Lcom/samsung/android/security/SemPassStorageManager;
++    move-result-object v0
++    if-nez v0, :r8s_native_pass
++    # Use Samsung's own legacy private-store implementation on non-PASS vendors.
++    invoke-super {p0}, Lcom/samsung/android/gallery/support/library/v16/Sem170ApiCompatImpl;->getKeepStorage()Lcom/samsung/android/gallery/support/library/abstraction/KeepStorage;
++    move-result-object v0
++    return-object v0
++    :r8s_native_pass
+ 
+     new-instance p0, Lcom/samsung/android/gallery/support/library/v16/KeepStorageSs175Impl;
+ 

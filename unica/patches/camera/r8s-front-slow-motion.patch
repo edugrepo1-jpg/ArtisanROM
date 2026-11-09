@@ -1,0 +1,19 @@
+--- a/smali_classes4/com/sec/android/app/camera/setting/repository/CameraSettingsImpl.smali
++++ b/smali_classes4/com/sec/android/app/camera/setting/repository/CameraSettingsImpl.smali
+@@ -4100,6 +4100,16 @@
+     return p0
+ 
+     :cond_0
++
++    sget-object v0, Lcom/sec/android/app/camera/interfaces/CameraSettings$Key;->FRONT_CAMCORDER_SLOW_MOTION_RESOLUTION:Lcom/sec/android/app/camera/interfaces/CameraSettings$Key;
++    if-ne p1, v0, :r8s_original_setting
++    # r8s exposes one front slow-motion profile: FHD120. Do not reuse the
++    # normal FHD30 fallback or legacy UI numbering as a Resolution enum ID.
++    sget-object v0, Lcom/sec/android/app/camera/interfaces/Resolution;->RESOLUTION_1920X1080_120FPS:Lcom/sec/android/app/camera/interfaces/Resolution;
++    invoke-virtual {v0}, Lcom/sec/android/app/camera/interfaces/Resolution;->getId()I
++    move-result v0
++    return v0
++    :r8s_original_setting
+     iget-object p0, p0, Lcom/sec/android/app/camera/setting/repository/CameraSettingsImpl;->mCurrentCameraSettings:Lcom/sec/android/app/camera/setting/repository/AbstractCameraSettings;
+ 
+     invoke-virtual {p0, p1}, Lcom/sec/android/app/camera/setting/repository/AbstractCameraSettings;->getValue(Lcom/sec/android/app/camera/interfaces/CameraSettings$Key;)I

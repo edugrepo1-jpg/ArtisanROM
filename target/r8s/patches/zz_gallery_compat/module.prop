@@ -1,0 +1,5 @@
+id=r8s_gallery_compat
+name=r8s Gallery compatibility
+author=ArtisanROM contributors
+version=1
+description=Restores the selection toolbar and uses Samsung legacy private storage when the vendor cannot provide PASS storage.
