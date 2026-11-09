@@ -1,4 +1,5 @@
 name: Build r8s port
+# Rebuild latest r8s branch HEAD for device validation.
 # 2026-11-03: Trigger an r8s-only ROM build via the existing branch push workflow.
 
 on:
