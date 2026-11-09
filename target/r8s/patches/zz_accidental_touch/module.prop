@@ -1,0 +1,5 @@
+id=r8s_accidental_touch
+name=r8s accidental touch protection
+author=ArtisanROM contributors
+version=1
+description=Restore native dark-pocket protection when the legacy Touch Pocket HAL stays OUT; keep Samsung's keyguard, popup and dismissal handling.
