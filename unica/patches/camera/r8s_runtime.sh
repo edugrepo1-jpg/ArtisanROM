@@ -13,6 +13,8 @@ if [[ "$TARGET_CODENAME" == "r8s" && "$SOURCE_PLATFORM_SDK_VERSION" -ge 36 ]]; t
         "$MODPATH/r8s-legacy-camera.patch" || return 1
     APPLY_PATCH "system" "system/priv-app/SamsungCamera/SamsungCamera.apk" \
         "$MODPATH/r8s-camera-controls.patch" || return 1
+    APPLY_PATCH "system" "system/priv-app/SamsungCamera/SamsungCamera.apk" \
+        "$MODPATH/r8s-front-slow-motion.patch" || return 1
 
     # Match the on-device fix: the camera's native loader must also find the
     # target detector inside its own APK namespace, not only /system/lib64.
