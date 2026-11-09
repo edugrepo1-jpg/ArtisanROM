@@ -1,0 +1,12 @@
+--- a/smali/k5/p2.smali
++++ b/smali/k5/p2.smali
+@@ -48,6 +48,9 @@
+ 
+ .method public j(I)V
+     .locals 3
++
++    # r8s: do not let this thermal scenario disable multi-window globally.
++    const/4 p1, -0x1
+ 
+     iget v0, p0, Lk5/p2;->e:I
+ 
